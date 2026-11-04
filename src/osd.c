@@ -82,12 +82,15 @@ static void glyph_row(osd_surface *s, int cx, int y, int row, unsigned bits, int
   }
 }
 
+/* OSD_STAR: a five-pointed star in one 8x8 cell (bit 0 is the left pixel) */
+static const char STAR[8] = { 0x08, 0x08, 0x7F, 0x3E, 0x1C, 0x36, 0x22, 0x00 };
+
 int osd_text(osd_surface *s, int x, int y, const char *text, int scale, uint32_t rgb)
 {
   int cx = x;
   for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
     /* Latin-1 text (see epg_latin1): ASCII, then U+00A0..U+00FF for accents, n tilde, inverted ? and ! */
-    const char *glyph = *p < 128 ? font8x8_basic[*p] : *p >= 0xA0 ? font8x8_ext_latin[*p - 0xA0] : font8x8_basic['?'];
+    const char *glyph = *p == OSD_STAR[0] ? STAR : *p < 128 ? font8x8_basic[*p] : *p >= 0xA0 ? font8x8_ext_latin[*p - 0xA0] : font8x8_basic['?'];
     if (*p >= 0xC0 && *p < 0xC0 + 30 && CAPS[*p - 0xC0].base) {
       glyph = font8x8_basic[(unsigned char)CAPS[*p - 0xC0].base];
       glyph_row(s, cx, y, -2, CAPS[*p - 0xC0].top, scale, rgb);

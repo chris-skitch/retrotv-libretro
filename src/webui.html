@@ -67,6 +67,7 @@ button[aria-expanded="true"] { border-color: var(--gold); color: var(--gold); }
 .findrow { display: flex; gap: 8px; margin-top: 10px; }
 .findrow .find { margin-top: 0; flex: 1; min-width: 0; }
 #favs { flex: 0 0 auto; padding: 0 14px; font-size: 18px; }
+#favs[hidden] { display: none; }
 #favs.on { background: var(--gold); color: #0a1640; border-color: var(--gold); }
 li .star { flex: 0 0 auto; align-self: center; background: none; border: 0; padding: 6px 4px; font-size: 22px; color: var(--muted); }
 li .star.on { color: var(--gold); }
@@ -232,7 +233,7 @@ function translatePage() {
   for (const e of document.querySelectorAll("[aria-label]")) e.setAttribute("aria-label", t(e.getAttribute("aria-label")));
   for (const e of document.querySelectorAll("[placeholder]")) e.placeholder = t(e.placeholder);
 }
-let chans = [], current = null, filter = "", settings = null, favOnly = false;
+let chans = [], current = null, filter = "", settings = null, favOnly = false, favsOn = false;
 try { favOnly = localStorage.getItem("retrotv-favs") === "1"; } catch (e) { /* private window */ }
 let pic = 0;                                         /* two screens: whose audio/leveller/picture the panel shows (0 = the focused one) */
 const PER_PICTURE = ["audio", "leveller", "picture"];
@@ -310,7 +311,7 @@ function render() {
   for (const c of chans) {
     const hay = [c.ch, c.name, c.group, c.now && c.now.title, c.next && c.next.title].join(" ").toLowerCase();
     if (q && !hay.includes(q)) continue;
-    if (favOnly && !c.fav) continue;
+    if (favsOn && favOnly && !c.fav) continue;
     if (headed && (c.group || "") !== group) {
       group = c.group || "";
       list.appendChild(el("h2", null, group || t("Other")));
@@ -342,12 +343,12 @@ function render() {
         render();
       } catch (err) { showMsg(t("Favourite: {e}", { e: err.message })); }
     };
-    li.appendChild(st);
+    if (favsOn) li.appendChild(st);                    /* Favourites on in System Settings */
     li.onclick = () => tune("/tune?ch=" + encodeURIComponent(c.ch));
     list.appendChild(li);
   }
   if (!list.firstChild) {
-    const none = favOnly && !q && chans.length ? t("No favourites yet: tap \u2605 to show every channel, then \u2606 on one") : chans.length ? t("No match") : "";
+    const none = favsOn && favOnly && !q && chans.length ? t("No favourites yet: tap \u2605 to show every channel, then \u2606 on one") : chans.length ? t("No match") : "";
     list.appendChild(el("li", "empty", none));
   }
 }
@@ -356,6 +357,8 @@ async function loadChannels() {
   try {
     const j = await call("/channels");
     chans = j.channels;
+    favsOn = !!j.favourites;
+    $("favs").hidden = !favsOn;
     current = j.current;
     render();
     showMsg("");

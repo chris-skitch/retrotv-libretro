@@ -62,6 +62,7 @@ int main(void)
   CHECK(o.remote == 0);
   options_defaults(&o);
   CHECK(o.lang == LANG_EN);
+  CHECK(o.favourites == 0);                           /* off until the user turns it on */
 
   for (int i = 0; i < options_count(); i++) {         /* keys unique and namespaced */
     CHECK(!strncmp(options_key(i), "retrotv_", 8));

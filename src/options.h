@@ -26,6 +26,7 @@ typedef struct {
   int update_check;        /* look for a newer RetroTV once a day */
   int dual;                /* two screens: 1280x480 for ReplayOS "Dual horizontal" (applied at start) */
   int lang;                /* LANG_EN, LANG_ES */
+  int favourites;          /* stars, Y/X in the list and the guide, favourites-only view (off by default) */
 } rtv_options;
 
 /* Defaults, as declared in the table. */

@@ -58,6 +58,9 @@ static const opt_def OPTS[] = {
   { "retrotv_theme", "Colour theme",
     "Colours of the banner, channel list and guide.",
     "interface", "navy", { { "navy", "Cable Navy" }, { "teletext", "Teletext" }, { "phosphor", "Green Phosphor" } } },
+  { "retrotv_favourites", "Favourites",
+    "Star channels with Y in the channel list and the guide; X then shows only them, and channel up/down goes through them. Stars on the phone remote too. Off: every channel, no stars.",
+    "interface", "off", { { "off", "Off" }, { "on", "On" } } },
   { "retrotv_static_style", "Tuning picture",
     "What you see while a channel tunes.",
     "interface", "classic", { { "classic", "Classic snow" }, { "vhs", "VHS" } } },
@@ -134,6 +137,7 @@ void options_parse(rtv_options *o, const char *(*get)(const char *key, void *ctx
   o->zaparoo = !strcmp(val("retrotv_zaparoo", get, ctx), "on");
   o->update_check = !strcmp(val("retrotv_update_check", get, ctx), "on");
   o->lang = lang_parse(val("retrotv_language", get, ctx));
+  o->favourites = !strcmp(val("retrotv_favourites", get, ctx), "on");
 }
 
 void options_defaults(rtv_options *o) { options_parse(o, NULL, NULL); }
