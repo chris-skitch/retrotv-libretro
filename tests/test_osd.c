@@ -73,6 +73,25 @@ int main(void)
   CHECK(lit > 5 && lit < 64);                                             /* glyph drawn inside its 8x8 cell */
   for (int y = 0; y < H; y++) for (int x = 8; x < W; x++) CHECK(px[y * W + x] == 0);
 
+  memset(px, 0, sizeof(px));                          /* Latin-1 capital U acute: a U, the accent above the cell */
+  osd_text(&s, 0, 4, "\xDA", 1, OSD_RGB(255, 255, 255));
+  uint32_t u[W * H];
+  memcpy(u, px, sizeof(px));
+  memset(px, 0, sizeof(px));
+  osd_text(&s, 0, 4, "U", 1, OSD_RGB(255, 255, 255));
+  int above = 0, same = 1;
+  for (int y = 0; y < H; y++)
+    for (int x = 0; x < W; x++) {
+      if (y < 4) above += u[y * W + x] != 0;
+      else same &= u[y * W + x] == px[y * W + x];
+    }
+  CHECK(above > 0 && same);
+  memset(px, 0, sizeof(px));                          /* lowercase n tilde: the font's own glyph */
+  CHECK(osd_text(&s, 0, 0, "\xF1", 1, OSD_RGB(255, 255, 255)) == 8);
+  lit = 0;
+  for (int i = 0; i < W * H; i++) lit += px[i] != 0;
+  CHECK(lit > 5);
+
   osd_text(&s, W - 4, H - 4, "\xF0\x9F\x8E\xA8 overflow", 3, OSD_RGB(1, 2, 3)); /* clipped, non-ASCII safe */
 
   uint32_t seed = 1, before = seed;

@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/github/license/chris-skitch/retrotv-libretro)](LICENSE)
 [![Raspberry Pi 5 · ReplayOS](https://img.shields.io/badge/Raspberry%20Pi%205-ReplayOS-c51a4a?logo=raspberrypi&logoColor=white)](https://www.replayos.com)
 
+🇪🇸 **[Léeme en español](docs/LEEME.md)**: RetroTV también habla español.
+
 **Flip through live TV like it's 1993.** RetroTV is a libretro core that turns an
 IPTV playlist into a 90s cable box for **ReplayOS on the Raspberry Pi 5**: channel
 up and down, a channel banner with what's on now and next, a scrolling TV guide,
@@ -41,6 +43,7 @@ real 240p mode, and it uses ReplayOS's own FFmpeg, so there's nothing else to in
 - **Sleep timer**, audio track choice, **colour themes** and a VHS tuning look
 - **Remote control** over HTTP: tune a channel from Zaparoo, a script or a phone
 - **Built-in test card** and a setup screen that explains what's wrong in plain words
+- **English or Spanish** on the TV (System Settings → Language / Idioma); the phone remote follows the phone's language
 - Works with **Dispatcharr**, **Tunarr**, free **[Pluto TV](docs/PLUTO_TV.md)** channels or any M3U playlist with MPEG-TS or HLS streams
 
 ## Install
@@ -164,6 +167,7 @@ watch: they apply immediately and last until you quit.
 
 | Group | Setting | Choices |
 |---|---|---|
+| Language / Idioma | Language / Idioma | English, Español (the screens change at once; this menu's names when RetroTV next starts) |
 | Picture | Overscan margin | None, 5 %, 10 % (shrinks the video so its edges stay visible) |
 | | Picture | Fit, Zoom (default for channels you haven't zoomed) |
 | | Remember zoom per channel | On, Off |
