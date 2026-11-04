@@ -89,7 +89,12 @@ Same 5 channels and 130 s button script for both runs (`scripts/pi-test.sh`, CPU
   matched by number + name, so reordering the playlist doesn't lose it; written off the main thread)
 - [x] Old stream closed on a background thread (see Known issues)
 
-Not planned (owner's call, Oct 2026): number entry with the D-pad, favourites, channel logos in the
+- [x] **Favourites** (issue #33, Nov 2026; System Settings → Favourites, off by default): Y in the channel list or the guide stars a channel, X switches both
+  to the favourites only, and channel up/down (pad and remote) then steps through the favourites. Stars on the
+  phone remote too (`/fav`). Saved per line-up next to the zoom memory (`retrotv-fav-<hash>.txt`; the view in
+  `retrotv-favview-<hash>.txt`)
+
+Not planned (owner's call, Oct 2026): number entry with the D-pad, channel logos in the
 banner, and automatically skipping channels that keep failing (the retry and NO SIGNAL behaviour stays).
 
 ## M2 — Options and QoL (libretro core options)

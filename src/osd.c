@@ -37,12 +37,15 @@ int osd_text_width(const char *text, int scale)
   return (int)strlen(text) * 8 * scale;
 }
 
+/* OSD_STAR: a five-pointed star in one 8x8 cell (bit 0 is the left pixel) */
+static const char STAR[8] = { 0x08, 0x08, 0x7F, 0x3E, 0x1C, 0x36, 0x22, 0x00 };
+
 int osd_text(osd_surface *s, int x, int y, const char *text, int scale, uint32_t rgb)
 {
   int cx = x;
   for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
     unsigned c = *p < 128 ? *p : '?';
-    const char *glyph = font8x8_basic[c];
+    const char *glyph = *p == OSD_STAR[0] ? STAR : font8x8_basic[c];
     for (int row = 0; row < 8; row++) {
       unsigned bits = (unsigned char)glyph[row];
       for (int col = 0; col < 8; col++) {

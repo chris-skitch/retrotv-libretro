@@ -64,6 +64,13 @@ button[aria-expanded="true"] { border-color: var(--gold); color: var(--gold); }
 
 .find { width: 100%; margin-top: 10px; padding: 10px 12px; font-size: 16px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
 .find::placeholder { color: var(--muted); }
+.findrow { display: flex; gap: 8px; margin-top: 10px; }
+.findrow .find { margin-top: 0; flex: 1; min-width: 0; }
+#favs { flex: 0 0 auto; padding: 0 14px; font-size: 18px; }
+#favs[hidden] { display: none; }
+#favs.on { background: var(--gold); color: #0a1640; border-color: var(--gold); }
+li .star { flex: 0 0 auto; align-self: center; background: none; border: 0; padding: 6px 4px; font-size: 22px; color: var(--muted); }
+li .star.on { color: var(--gold); }
 .msg { margin: 10px 0 0; padding: 8px 12px; border-radius: 4px; background: #3a1018; color: #ffd6d2; font-size: 14px; display: none; }
 .msg.show { display: block; }
 
@@ -126,14 +133,18 @@ footer { color: var(--muted); font: 12px var(--mono); text-align: center; margin
   <div class="msg" id="msg"></div>
 </header>
 <main>
-  <input class="find" id="find" type="search" placeholder="Find a channel or programme" autocomplete="off" aria-label="Find a channel or programme">
+  <div class="findrow">
+    <input class="find" id="find" type="search" placeholder="Find a channel or programme" autocomplete="off" aria-label="Find a channel or programme">
+    <button id="favs" aria-pressed="false" aria-label="Show favourites only">&#9733;</button>
+  </div>
   <ul id="list"></ul>
 </main>
-<footer>RetroTV remote &middot; tap a channel to watch it</footer>
+<footer>RetroTV remote &middot; tap a channel to watch it, &#9734; to make it a favourite</footer>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
-let chans = [], current = null, filter = "", settings = null;
+let chans = [], current = null, filter = "", settings = null, favOnly = false, favsOn = false;
+try { favOnly = localStorage.getItem("retrotv-favs") === "1"; } catch (e) { /* private window */ }
 let pic = 0;                                         /* two screens: whose audio/leveller/picture the panel shows (0 = the focused one) */
 const PER_PICTURE = ["audio", "leveller", "picture"];
 
@@ -210,6 +221,7 @@ function render() {
   for (const c of chans) {
     const hay = [c.ch, c.name, c.group, c.now && c.now.title, c.next && c.next.title].join(" ").toLowerCase();
     if (q && !hay.includes(q)) continue;
+    if (favsOn && favOnly && !c.fav) continue;
     if (headed && (c.group || "") !== group) {
       group = c.group || "";
       list.appendChild(el("h2", null, group || "Other"));
@@ -231,16 +243,32 @@ function render() {
     if (!c.now && !c.next) t.appendChild(el("div", "g", c.group || "No guide"));
     else if (!headed && c.group) t.appendChild(el("div", "g", c.group));
     li.appendChild(t);
+    const st = el("button", "star" + (c.fav ? " on" : ""), c.fav ? "\u2605" : "\u2606");
+    st.setAttribute("aria-label", (c.fav ? "Remove " + c.name + " from" : "Add " + c.name + " to") + " favourites");
+    st.onclick = async e => {
+      e.stopPropagation();                                 /* a star isn't a tune */
+      try {
+        await call("/fav?ch=" + encodeURIComponent(c.ch) + "&on=" + (c.fav ? 0 : 1));
+        c.fav = !c.fav;
+        render();
+      } catch (err) { showMsg("Favourite: " + err.message); }
+    };
+    if (favsOn) li.appendChild(st);                    /* Favourites on in System Settings */
     li.onclick = () => tune("/tune?ch=" + encodeURIComponent(c.ch));
     list.appendChild(li);
   }
-  if (!list.firstChild) list.appendChild(el("li", "empty", chans.length ? "No match" : ""));
+  if (!list.firstChild) {
+    const none = favsOn && favOnly && !q && chans.length ? "No favourites yet: tap \u2605 to show every channel, then \u2606 on one" : chans.length ? "No match" : "";
+    list.appendChild(el("li", "empty", none));
+  }
 }
 
 async function loadChannels() {
   try {
     const j = await call("/channels");
     chans = j.channels;
+    favsOn = !!j.favourites;
+    $("favs").hidden = !favsOn;
     current = j.current;
     render();
     showMsg("");
@@ -372,6 +400,17 @@ $("last").onclick = () => tune("/last");
 $("pp").onclick = () => tune($("pp").dataset.paused ? "/play" : "/pause");
 $("live").onclick = () => tune("/live");
 $("find").oninput = e => { filter = e.target.value; render(); };
+function showFavs() {
+  $("favs").classList.toggle("on", favOnly);
+  $("favs").setAttribute("aria-pressed", String(favOnly));
+}
+$("favs").onclick = () => {
+  favOnly = !favOnly;
+  try { localStorage.setItem("retrotv-favs", favOnly ? "1" : "0"); } catch (e) { /* private window */ }
+  showFavs();
+  render();
+};
+showFavs();
 
 loadChannels().then(refresh);
 setInterval(refresh, 4000);
