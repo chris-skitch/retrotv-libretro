@@ -106,6 +106,9 @@ banner, and automatically skipping channels that keep failing (the retry and NO 
 - [x] Output 640x240 (240p), off by default: video lines averaged in pairs, menus drawn straight at 240 lines
   (small text keeps 8 rows), switchable while running from System Settings or the X menu; ReplayOS switches
   the CRT to 2560x240 @ 60 Hz (verified)
+- [x] **Spanish** (Nov 2026): System Settings → Language / Idioma; every TV string in `src/lang.c` (checked by
+  `make check`), Latin-1 glyphs for accents, the phone page follows the phone's language, `docs/LEEME.md`.
+  More languages: one column per language in `src/lang.c` and the page's dictionary
 - [ ] 16:9 output for LCDs (deferred)
 - [x] Refresh follows the stream: 50 Hz for 25/50 fps channels, else 60 Hz (`SET_SYSTEM_AV_INFO`; ReplayOS switches the CRT mode)
 - [x] Refresh option: Auto (follow the channel) / 60 Hz / 50 Hz, applied as soon as it changes

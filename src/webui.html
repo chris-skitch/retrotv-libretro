@@ -100,36 +100,36 @@ footer { color: var(--muted); font: 12px var(--mono); text-align: center; margin
     <div class="nowt">
       <div class="top"><span class="num" id="num">--</span><span class="name" id="name">RetroTV</span></div>
       <div class="prog" id="prog">&nbsp;</div>
-      <div class="meta"><span class="state" id="state">connecting</span><span id="times"></span></div>
+      <div class="meta"><span class="state" id="state"></span><span id="times"></span></div>
       <div class="nx" id="nx"></div>
       <div class="bar" id="bar" hidden><i></i></div>
     </div>
   </div>
   <div class="keys">
     <button id="down" aria-label="Channel down">&#9660; CH</button>
-    <button id="last" aria-label="Previous channel">LAST</button>
+    <button id="last" aria-label="Previous channel" data-t>LAST</button>
     <button id="up" aria-label="Channel up">CH &#9650;</button>
     <button id="gear" aria-label="Settings" aria-expanded="false" aria-controls="settings">&#9881;</button>
   </div>
   <div class="focus" id="shift">
     <button id="pp" aria-label="Pause">&#10074;&#10074; PAUSE</button>
-    <button id="live" aria-label="Back to live">LIVE</button>
+    <button id="live" aria-label="Back to live" data-t>LIVE</button>
   </div>
   <div class="focus" id="focus" hidden>
-    <button id="f1" aria-label="Control screen 1">SCREEN 1</button>
-    <button id="f2" aria-label="Control screen 2">SCREEN 2</button>
-    <button id="swap" aria-label="Swap the two screens' channels">SWAP</button>
+    <button id="f1" aria-label="Control screen 1" data-t>SCREEN 1</button>
+    <button id="f2" aria-label="Control screen 2" data-t>SCREEN 2</button>
+    <button id="swap" aria-label="Swap the two screens' channels" data-t>SWAP</button>
   </div>
   <div class="settings" id="settings" hidden>
-    <div class="row" id="r-pic" hidden><div class="lbl">Settings for <em>audio, leveller, picture</em></div><div class="seg" id="s-pic"></div></div>
-    <div class="row"><div class="lbl">Sleep timer <em id="sleepleft"></em></div><div class="seg" id="s-sleep"></div></div>
-    <div class="row"><div class="lbl">Audio track</div><div class="seg" id="s-audio"></div></div>
-    <div class="row"><div class="lbl">Volume leveller</div><div class="seg" id="s-leveller"></div></div>
-    <div class="row"><div class="lbl">Picture</div><div class="seg" id="s-picture"></div></div>
-    <div class="row" id="r-output"><div class="lbl">Output</div><div class="seg" id="s-output"></div></div>
-    <div class="row" id="r-screen2" hidden><div class="lbl">Screen 2</div><div class="seg" id="s-screen2"></div></div>
+    <div class="row" id="r-pic" hidden><div class="lbl"><span data-t>Settings for</span> <em data-t>audio, leveller, picture</em></div><div class="seg" id="s-pic"></div></div>
+    <div class="row"><div class="lbl"><span data-t>Sleep timer</span> <em id="sleepleft"></em></div><div class="seg" id="s-sleep"></div></div>
+    <div class="row"><div class="lbl" data-t>Audio track</div><div class="seg" id="s-audio"></div></div>
+    <div class="row"><div class="lbl" data-t>Volume leveller</div><div class="seg" id="s-leveller"></div></div>
+    <div class="row"><div class="lbl" data-t>Picture</div><div class="seg" id="s-picture"></div></div>
+    <div class="row" id="r-output"><div class="lbl" data-t>Output</div><div class="seg" id="s-output"></div></div>
+    <div class="row" id="r-screen2" hidden><div class="lbl" data-t>Screen 2</div><div class="seg" id="s-screen2"></div></div>
   </div>
-  <div class="upd" id="upd" hidden><span id="updtxt"></span><button id="updbtn">INSTALL</button></div>
+  <div class="upd" id="upd" hidden><span id="updtxt"></span><button id="updbtn" data-t>INSTALL</button></div>
   <div class="msg" id="msg"></div>
 </header>
 <main>
@@ -139,10 +139,100 @@ footer { color: var(--muted); font: 12px var(--mono); text-align: center; margin
   </div>
   <ul id="list"></ul>
 </main>
-<footer>RetroTV remote &middot; tap a channel to watch it, &#9734; to make it a favourite</footer>
+<footer data-t>RetroTV remote · tap a channel to watch it, ☆ to make it a favourite</footer>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
+
+/* ---------- language: the phone's (Spanish phone: Spanish page) ---------- */
+/* keyed by the English used below; scripts/check-lang.py checks each t() call and data-t text has one */
+const ES = {
+  "RetroTV Remote": "Mando RetroTV",
+  "Channel down": "Canal abajo",
+  "Previous channel": "Canal anterior",
+  "Channel up": "Canal arriba",
+  "Settings": "Ajustes",
+  "Pause": "Pausa",
+  "Play": "Seguir",
+  "Back to live": "Volver al directo",
+  "Control screen 1": "Controlar la pantalla 1",
+  "Control screen 2": "Controlar la pantalla 2",
+  "Swap the two screens' channels": "Intercambiar los canales de las dos pantallas",
+  "Find a channel or programme": "Buscar un canal o programa",
+  "Show favourites only": "Ver solo favoritos",
+  "LAST": "ANTERIOR",
+  "LIVE": "DIRECTO",
+  "LIVE ({t})": "DIRECTO ({t})",
+  "PLAY": "SEGUIR",
+  "PAUSE": "PAUSA",
+  "SCREEN 1": "PANTALLA 1",
+  "SCREEN 2": "PANTALLA 2",
+  "SWAP": "CAMBIAR",
+  "INSTALL": "INSTALAR",
+  "TRY AGAIN": "REINTENTAR",
+  "Settings for": "Ajustes de",
+  "audio, leveller, picture": "audio, nivelador, imagen",
+  "Sleep timer": "Apagado autom\u00e1tico",
+  "Audio track": "Pista de audio",
+  "Volume leveller": "Nivelador de volumen",
+  "Picture": "Imagen",
+  "Output": "Salida",
+  "Screen 2": "Pantalla 2",
+  "Screen {n}": "Pantalla {n}",
+  "RetroTV remote \u00b7 tap a channel to watch it, \u2606 to make it a favourite": "Mando RetroTV \u00b7 toca un canal para verlo y \u2606 para hacerlo favorito",
+  "NOW": "AHORA",
+  "NEXT": "LUEGO",
+  "Next": "Luego",
+  "Other": "Otros",
+  "No guide": "Sin gu\u00eda",
+  "No match": "Nada coincide",
+  "No favourites yet: tap \u2605 to show every channel, then \u2606 on one": "A\u00fan no hay favoritos: toca \u2605 para ver todos los canales y luego \u2606 en uno",
+  "Add {name} to favourites": "A\u00f1adir {name} a favoritos",
+  "Remove {name} from favourites": "Quitar {name} de favoritos",
+  "Favourite: {e}": "Favorito: {e}",
+  "Channel list: {e}": "Lista de canales: {e}",
+  "Settings: {e}": "Ajustes: {e}",
+  "RetroTV {v} is available": "RetroTV {v} disponible",
+  "Downloading RetroTV {v}\u2026": "Descargando RetroTV {v}\u2026",
+  "Installing RetroTV {v}\u2026": "Instalando RetroTV {v}\u2026",
+  "RetroTV {v} installed: reopen RetroTV to use it": "RetroTV {v} instalado: vuelve a abrir RetroTV para usarlo",
+  "RetroTV {v} installed: restart ReplayOS to finish": "RetroTV {v} instalado: reinicia ReplayOS para terminar",
+  "The update didn't install": "La actualizaci\u00f3n no se instal\u00f3",
+  "RetroTV isn't answering. Is it running? ({e})": "RetroTV no responde. \u00bfEst\u00e1 encendido? ({e})",
+  "Only one track on this channel": "Este canal solo tiene una pista",
+  "{n} min left": "quedan {n} min",
+  "Off": "No",
+  "On": "S\u00ed",
+  "Normal": "Normal",
+  "Loud": "Alto",
+  "Fit": "Ajustar",
+  "Zoom": "Zoom",
+  "connecting": "conectando",
+  "offline": "sin conexi\u00f3n",
+  "tuning": "sintonizando",
+  "playing": "en antena",
+  "no signal": "sin se\u00f1al",
+  "off": "apagado",
+  "test card": "carta de ajuste",
+  "no channels": "sin canales",
+};
+const LANG = /^es\b/i.test(navigator.language || "") ? "es" : "en";
+/* English text in the phone's language; {name} placeholders filled from a */
+function t(en, a) {
+  let r = (LANG === "es" && ES[en]) || en;
+  for (const k in a || {}) r = r.split("{" + k + "}").join(a[k]);
+  return r;
+}
+/* the TV's states in /status */
+const STATE = { tuning: t("tuning"), playing: t("playing"), "no signal": t("no signal"), off: t("off"),
+                "test card": t("test card"), "no channels": t("no channels") };
+function translatePage() {
+  document.documentElement.lang = LANG;
+  document.title = t("RetroTV Remote");
+  for (const e of document.querySelectorAll("[data-t]")) e.textContent = t(e.textContent);
+  for (const e of document.querySelectorAll("[aria-label]")) e.setAttribute("aria-label", t(e.getAttribute("aria-label")));
+  for (const e of document.querySelectorAll("[placeholder]")) e.placeholder = t(e.placeholder);
+}
 let chans = [], current = null, filter = "", settings = null, favOnly = false, favsOn = false;
 try { favOnly = localStorage.getItem("retrotv-favs") === "1"; } catch (e) { /* private window */ }
 let pic = 0;                                         /* two screens: whose audio/leveller/picture the panel shows (0 = the focused one) */
@@ -201,7 +291,7 @@ async function call(path) {
 
 function progLine(kind, p) {
   const d = el("div", "pr " + (kind === "now" ? "pn" : "px"));   /* not "now": that's the header panel */
-  d.appendChild(el("span", "k", kind === "now" ? "NOW" : "NEXT"));
+  d.appendChild(el("span", "k", kind === "now" ? t("NOW") : t("NEXT")));
   const v = el("span", "v");
   v.appendChild(el("span", "tm", hhmm(p.start)));
   v.appendChild(document.createTextNode(p.title));
@@ -224,41 +314,41 @@ function render() {
     if (favsOn && favOnly && !c.fav) continue;
     if (headed && (c.group || "") !== group) {
       group = c.group || "";
-      list.appendChild(el("h2", null, group || "Other"));
+      list.appendChild(el("h2", null, group || t("Other")));
     }
     const li = el("li", "ch" + (c.ch === current ? " on" : ""));
     const art = el("div", "art");
     fillArt(art, c, c.now);
     li.appendChild(art);
-    const t = el("div", "t");
+    const info = el("div", "t");
     const top = el("div", "top");
     top.appendChild(el("span", "num", c.ch));
     top.appendChild(el("span", "cn", c.name));
-    t.appendChild(top);
+    info.appendChild(top);
     if (c.now) {
-      t.appendChild(progLine("now", c.now));
-      const b = el("div", "bar"); b.appendChild(el("i")); t.appendChild(b); setBar(b, c.now);
+      info.appendChild(progLine("now", c.now));
+      const b = el("div", "bar"); b.appendChild(el("i")); info.appendChild(b); setBar(b, c.now);
     }
-    if (c.next) t.appendChild(progLine("next", c.next));
-    if (!c.now && !c.next) t.appendChild(el("div", "g", c.group || "No guide"));
-    else if (!headed && c.group) t.appendChild(el("div", "g", c.group));
-    li.appendChild(t);
+    if (c.next) info.appendChild(progLine("next", c.next));
+    if (!c.now && !c.next) info.appendChild(el("div", "g", c.group || t("No guide")));
+    else if (!headed && c.group) info.appendChild(el("div", "g", c.group));
+    li.appendChild(info);
     const st = el("button", "star" + (c.fav ? " on" : ""), c.fav ? "\u2605" : "\u2606");
-    st.setAttribute("aria-label", (c.fav ? "Remove " + c.name + " from" : "Add " + c.name + " to") + " favourites");
+    st.setAttribute("aria-label", c.fav ? t("Remove {name} from favourites", { name: c.name }) : t("Add {name} to favourites", { name: c.name }));
     st.onclick = async e => {
       e.stopPropagation();                                 /* a star isn't a tune */
       try {
         await call("/fav?ch=" + encodeURIComponent(c.ch) + "&on=" + (c.fav ? 0 : 1));
         c.fav = !c.fav;
         render();
-      } catch (err) { showMsg("Favourite: " + err.message); }
+      } catch (err) { showMsg(t("Favourite: {e}", { e: err.message })); }
     };
     if (favsOn) li.appendChild(st);                    /* Favourites on in System Settings */
     li.onclick = () => tune("/tune?ch=" + encodeURIComponent(c.ch));
     list.appendChild(li);
   }
   if (!list.firstChild) {
-    const none = favsOn && favOnly && !q && chans.length ? "No favourites yet: tap \u2605 to show every channel, then \u2606 on one" : chans.length ? "No match" : "";
+    const none = favsOn && favOnly && !q && chans.length ? t("No favourites yet: tap \u2605 to show every channel, then \u2606 on one") : chans.length ? t("No match") : "";
     list.appendChild(el("li", "empty", none));
   }
 }
@@ -272,7 +362,7 @@ async function loadChannels() {
     current = j.current;
     render();
     showMsg("");
-  } catch (e) { showMsg("Channel list: " + e.message); }
+  } catch (e) { showMsg(t("Channel list: {e}", { e: e.message })); }
 }
 
 async function refresh() {
@@ -282,38 +372,38 @@ async function refresh() {
     $("name").textContent = s.name;
     const c = chans.find(x => x.ch === s.ch);
     $("prog").textContent = s.now || (c && c.group) || " ";
-    $("state").textContent = s.state;
+    $("state").textContent = STATE[s.state] || s.state;
     $("state").className = "state " + s.state.replace(/\s/g, "");
     const p = c && c.now && c.now.title === s.now ? c.now : null;
     $("times").textContent = p ? hhmm(p.start) + " – " + hhmm(p.stop) : "";
     const nx = c && c.next && c.next.title === s.next ? c.next : null;
-    $("nx").textContent = s.next ? "Next" + (nx ? " " + hhmm(nx.start) : "") + "  " + s.next : "";
+    $("nx").textContent = s.next ? t("Next") + (nx ? " " + hhmm(nx.start) : "") + "  " + s.next : "";
     setBar($("bar"), p);
     fillArt($("nowart"), c || { ch: s.ch }, p);
     const two = s.dual && s.screen2 && s.screen2.on;   /* focus switch while both screens play */
     $("focus").hidden = !two;
     if (two) { $("f1").className = s.focus === 1 ? "on" : ""; $("f2").className = s.focus === 2 ? "on" : ""; }
-    $("pp").innerHTML = s.paused ? "&#9654; PLAY" : "&#10074;&#10074; PAUSE";
-    $("pp").setAttribute("aria-label", s.paused ? "Play" : "Pause");
+    $("pp").textContent = s.paused ? "\u25B6 " + t("PLAY") : "\u275A\u275A " + t("PAUSE");
+    $("pp").setAttribute("aria-label", s.paused ? t("Play") : t("Pause"));
     $("pp").dataset.paused = s.paused ? "1" : "";
-    $("live").textContent = s.behind > 0 ? "LIVE (-" + Math.floor(s.behind / 60) + ":" + String(s.behind % 60).padStart(2, "0") + ")" : "LIVE";
+    $("live").textContent = s.behind > 0 ? t("LIVE ({t})", { t: "-" + Math.floor(s.behind / 60) + ":" + String(s.behind % 60).padStart(2, "0") }) : t("LIVE");
     $("live").className = s.behind > 0 ? "on" : "";
     const v = s.update_latest || "";               /* a newer RetroTV */
-    const ut = { available: "RetroTV " + v + " is available", downloading: "Downloading RetroTV " + v + "\u2026",
-                 installing: "Installing RetroTV " + v + "\u2026", installed: "RetroTV " + v + " installed: reopen RetroTV to use it",
-                 restart: "RetroTV " + v + " installed: restart ReplayOS to finish", failed: "The update didn't install" }[s.update];
+    const ut = { available: t("RetroTV {v} is available", { v }), downloading: t("Downloading RetroTV {v}\u2026", { v }),
+                 installing: t("Installing RetroTV {v}\u2026", { v }), installed: t("RetroTV {v} installed: reopen RetroTV to use it", { v }),
+                 restart: t("RetroTV {v} installed: restart ReplayOS to finish", { v }), failed: t("The update didn't install") }[s.update];
     $("upd").hidden = !ut;
     if (ut) {
       $("updtxt").textContent = ut;
       $("updbtn").hidden = !(s.update === "available" || s.update === "failed");
-      $("updbtn").textContent = s.update === "failed" ? "TRY AGAIN" : "INSTALL";
+      $("updbtn").textContent = s.update === "failed" ? t("TRY AGAIN") : t("INSTALL");
     }
     if (s.ch !== current) { current = s.ch; render(); loadSettings(); }
     showMsg("");
   } catch (e) {
-    $("state").textContent = "offline";
+    $("state").textContent = t("offline");
     $("state").className = "state offline";
-    showMsg("RetroTV isn't answering. Is it running? (" + e.message + ")");
+    showMsg(t("RetroTV isn't answering. Is it running? ({e})", { e: e.message }));
   }
 }
 
@@ -328,7 +418,7 @@ async function tune(path) {
 function seg(id, choices, cur, param) {
   const box = $(id);
   box.textContent = "";
-  if (!choices.length) { box.appendChild(el("span", "none", "Only one track on this channel")); return; }
+  if (!choices.length) { box.appendChild(el("span", "none", t("Only one track on this channel"))); return; }
   for (const [val, label] of choices) {
     const b = el("button", String(val) === String(cur) ? "on" : "", label);
     b.setAttribute("aria-pressed", String(val) === String(cur));
@@ -340,21 +430,21 @@ function seg(id, choices, cur, param) {
 function renderSettings() {
   const s = settings;
   if (!s) return;
-  seg("s-sleep", s.sleep_steps.map(m => [m, m ? m + " min" : "Off"]), s.sleep, "sleep");
-  $("sleepleft").textContent = s.sleep && s.sleep_left ? s.sleep_left + " min left" : "";
+  seg("s-sleep", s.sleep_steps.map(m => [m, m ? m + " min" : t("Off")]), s.sleep, "sleep");
+  $("sleepleft").textContent = s.sleep && s.sleep_left ? t("{n} min left", { n: s.sleep_left }) : "";
   seg("s-audio", s.audio_tracks.length > 1 ? s.audio_tracks.map((l, i) => [i + 1, (i + 1) + (l ? " " + l.toUpperCase() : "")]) : [], s.audio, "audio");
-  seg("s-leveller", [["off", "Off"], ["normal", "Normal"], ["loud", "Loud"]], s.leveller, "leveller");
-  seg("s-picture", [["fit", "Fit"], ["zoom", "Zoom"]], s.picture, "picture");
+  seg("s-leveller", [["off", t("Off")], ["normal", t("Normal")], ["loud", t("Loud")]], s.leveller, "leveller");
+  seg("s-picture", [["fit", t("Fit")], ["zoom", t("Zoom")]], s.picture, "picture");
   seg("s-output", [["480", "640x480"], ["240", "240p"]], s.output, "output");
   $("r-output").hidden = !!s.dual;                  /* fixed picture size with two screens */
   $("r-screen2").hidden = !s.dual;
-  if (s.dual) seg("s-screen2", [["off", "Off"], ["on", "On"]], s.screen2, "screen2");
+  if (s.dual) seg("s-screen2", [["off", t("Off")], ["on", t("On")]], s.screen2, "screen2");
   $("r-pic").hidden = !pic;
   if (pic) {                                         /* changes that picture without moving the sound */
     const box = $("s-pic");
     box.textContent = "";
     for (const n of [1, 2]) {
-      const b = el("button", n === pic ? "on" : "", "Screen " + n + (n === s.focus ? " \u266A" : ""));
+      const b = el("button", n === pic ? "on" : "", t("Screen {n}", { n }) + (n === s.focus ? " \u266A" : ""));
       b.setAttribute("aria-pressed", n === pic);
       b.onclick = () => { pic = n; loadSettings(); };
       box.appendChild(b);
@@ -372,7 +462,7 @@ async function loadSettings() {
     } else pic = 0;
     settings = s;
     renderSettings();
-  } catch (e) { showMsg("Settings: " + e.message); }
+  } catch (e) { showMsg(t("Settings: {e}", { e: e.message })); }
 }
 
 async function change(q) {
@@ -412,6 +502,8 @@ $("favs").onclick = () => {
 };
 showFavs();
 
+translatePage();
+$("state").textContent = t("connecting");
 loadChannels().then(refresh);
 setInterval(refresh, 4000);
 setInterval(loadSettings, 5000);

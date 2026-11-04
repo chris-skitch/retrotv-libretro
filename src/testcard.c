@@ -1,4 +1,5 @@
 #include "testcard.h"
+#include "lang.h"
 
 #include <math.h>
 #include <string.h>
@@ -50,6 +51,6 @@ void testcard_draw(osd_surface *s, int side, const char *clock)
   const char *t = "RETROTV";
   osd_text_shadow(s, bx + (bw - osd_text_width(t, 4)) / 2, by + 14, t, 4, OSD_RGB(255, 255, 255));
   if (clock && *clock) osd_text_shadow(s, bx + (bw - osd_text_width(clock, 2)) / 2, by + 54, clock, 2, OSD_RGB(255, 214, 64));
-  const char *tone = side == 1 ? "1 kHz  LEFT" : side == 2 ? "1 kHz  RIGHT" : "1 kHz  LEFT + RIGHT";
+  const char *tone = side == 1 ? T("1 kHz  LEFT") : side == 2 ? T("1 kHz  RIGHT") : T("1 kHz  LEFT + RIGHT");
   osd_text(s, bx + (bw - osd_text_width(tone, 2)) / 2, by + 84, tone, 2, OSD_RGB(160, 200, 255));
 }

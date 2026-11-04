@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "font8x8_basic.h"
+#include "font8x8_ext_latin.h"
 
 static inline uint32_t blend(uint32_t dst, uint32_t src, int a)
 {
@@ -37,6 +38,50 @@ int osd_text_width(const char *text, int scale)
   return (int)strlen(text) * 8 * scale;
 }
 
+/* Capitals with an accent: the 8x8 font squeezes them to lowercase height
+ * (AUN with a bar, not AÚN), so they are drawn as the plain capital with the
+ * accent in the two rows above the cell. Per Latin-1 code from U+00C0: the
+ * capital, and the accent's two rows (top, bottom; bit 0 is the left pixel). */
+static const struct { char base; unsigned char top, bottom; } CAPS[30] = {
+#define GRAVE 0x0C, 0x18
+#define ACUTE 0x18, 0x0C
+#define CIRC 0x0C, 0x12
+#define TILDE 0x26, 0x19
+#define DIAER 0x00, 0x12
+  { 'A', GRAVE }, { 'A', ACUTE }, { 'A', CIRC }, { 'A', TILDE }, { 'A', DIAER }, { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 },
+  { 'E', GRAVE }, { 'E', ACUTE }, { 'E', CIRC }, { 'E', DIAER },
+  { 'I', GRAVE }, { 'I', ACUTE }, { 'I', CIRC }, { 'I', DIAER },
+  { 0, 0, 0 }, { 'N', TILDE },
+  { 'O', GRAVE }, { 'O', ACUTE }, { 'O', CIRC }, { 'O', TILDE }, { 'O', DIAER }, { 0, 0, 0 }, { 0, 0, 0 },
+  { 'U', GRAVE }, { 'U', ACUTE }, { 'U', CIRC }, { 'U', DIAER },
+  { 'Y', ACUTE },
+#undef GRAVE
+#undef ACUTE
+#undef CIRC
+#undef TILDE
+#undef DIAER
+};
+
+/* one row of 8 pixels (bits) at glyph row `row` (negative: above the cell) */
+static void glyph_row(osd_surface *s, int cx, int y, int row, unsigned bits, int scale, uint32_t rgb)
+{
+  /* rows per glyph row: scale, halved in 240p but never below 1 */
+  int rs = scale >> s->vshift ? scale >> s->vshift : 1;
+  for (int col = 0; col < 8; col++) {
+    if (!(bits & (1u << col))) continue;     /* bit 0 is the leftmost pixel */
+    int px = cx + col * scale, py = (y >> s->vshift) + row * rs;
+    for (int dy = 0; dy < rs; dy++) {
+      int yy = py + dy;
+      if (yy < 0 || yy >= osd_rows(s)) continue;
+      uint32_t *line = s->px + (size_t)yy * (size_t)s->pitch;
+      for (int dx = 0; dx < scale; dx++) {
+        int xx = px + dx;
+        if (xx >= 0 && xx < s->w) line[xx] = rgb;
+      }
+    }
+  }
+}
+
 /* OSD_STAR: a five-pointed star in one 8x8 cell (bit 0 is the left pixel) */
 static const char STAR[8] = { 0x08, 0x08, 0x7F, 0x3E, 0x1C, 0x36, 0x22, 0x00 };
 
@@ -44,26 +89,14 @@ int osd_text(osd_surface *s, int x, int y, const char *text, int scale, uint32_t
 {
   int cx = x;
   for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
-    unsigned c = *p < 128 ? *p : '?';
-    const char *glyph = *p == OSD_STAR[0] ? STAR : font8x8_basic[c];
-    for (int row = 0; row < 8; row++) {
-      unsigned bits = (unsigned char)glyph[row];
-      for (int col = 0; col < 8; col++) {
-        if (!(bits & (1u << col))) continue;   /* bit 0 is the leftmost pixel */
-        /* rows per glyph row: scale, halved in 240p but never below 1 */
-        int rs = scale >> s->vshift ? scale >> s->vshift : 1;
-        int px = cx + col * scale, py = (y >> s->vshift) + row * rs;
-        for (int dy = 0; dy < rs; dy++) {
-          int yy = py + dy;
-          if (yy < 0 || yy >= osd_rows(s)) continue;
-          uint32_t *line = s->px + (size_t)yy * (size_t)s->pitch;
-          for (int dx = 0; dx < scale; dx++) {
-            int xx = px + dx;
-            if (xx >= 0 && xx < s->w) line[xx] = rgb;
-          }
-        }
-      }
+    /* Latin-1 text (see epg_latin1): ASCII, then U+00A0..U+00FF for accents, n tilde, inverted ? and ! */
+    const char *glyph = *p == OSD_STAR[0] ? STAR : *p < 128 ? font8x8_basic[*p] : *p >= 0xA0 ? font8x8_ext_latin[*p - 0xA0] : font8x8_basic['?'];
+    if (*p >= 0xC0 && *p < 0xC0 + 30 && CAPS[*p - 0xC0].base) {
+      glyph = font8x8_basic[(unsigned char)CAPS[*p - 0xC0].base];
+      glyph_row(s, cx, y, -2, CAPS[*p - 0xC0].top, scale, rgb);
+      glyph_row(s, cx, y, -1, CAPS[*p - 0xC0].bottom, scale, rgb);
     }
+    for (int row = 0; row < 8; row++) glyph_row(s, cx, y, row, (unsigned char)glyph[row], scale, rgb);
     cx += 8 * scale;
   }
   return cx - x;

@@ -1,4 +1,5 @@
 #include "guide.h"
+#include "lang.h"
 #include "theme.h"
 
 #include <stdio.h>
@@ -81,7 +82,7 @@ const epg_prog *guide_focus(const epg *g, const m3u_list *l, const guide_view *v
 /* ASCII copy of s cut to fit max characters */
 static void label(const char *s, char *out, size_t n, int max)
 {
-  epg_ascii(s ? s : "", out, n);
+  epg_latin1(s ? s : "", out, n);
   epg_shorten(out, max);
 }
 
@@ -137,7 +138,7 @@ static void draw_info(osd_surface *s, const m3u_list *l, const epg_prog *p, cons
     osd_text(s, x, TOP, buf, 1, GOLD);
   }
   if (!p) {
-    osd_text_shadow(s, x, TOP + 20, "No information", 2, DIM);
+    osd_text_shadow(s, x, TOP + 20, T("No information"), 2, DIM);
     return;
   }
   label(p->title, buf, sizeof(buf), (R - x) / 16);
@@ -150,7 +151,7 @@ static void draw_info(osd_surface *s, const m3u_list *l, const epg_prog *p, cons
   osd_text(s, x, TOP + 42, buf, 1, YELLOW);
   if (p->desc) {
     char d[512];
-    epg_ascii(p->desc, d, sizeof(d));
+    epg_latin1(p->desc, d, sizeof(d));
     wrap(s, x, TOP + 60, d, cols, s->vshift ? 3 : 5, DIM);     /* taller lines in 240p */
   }
 }
@@ -160,8 +161,7 @@ static void draw_ruler(osd_surface *s, time_t t0, time_t now, int clock24)
   struct tm tmv;
   char day[24], t[12];
   localtime_r(&now, &tmv);
-  strftime(day, sizeof(day), "%a %d %b", &tmv);
-  for (char *c = day; *c; c++) if (*c >= 'a' && *c <= 'z') *c -= 32;
+  snprintf(day, sizeof(day), "%s %02d %s", lang_day(tmv.tm_wday), tmv.tm_mday, lang_month(tmv.tm_mon));
   osd_fill(s, L, RULER_Y, R - L, 18, GOLD, 255);
   osd_text(s, L + 6, RULER_Y + 5, day, 1, NAVY);
   for (time_t m = t0; m < t0 + GUIDE_SPAN; m += GUIDE_STEP) {
@@ -182,7 +182,7 @@ void guide_draw(osd_surface *s, const m3u_list *l, const epg *g, const guide_vie
   guide_cell cells[24];
   size_t count = vcount(v, l);
   if (!count) {
-    const char *t = "NO FAVOURITES YET", *h = "PRESS X FOR ALL CHANNELS, THEN Y TO STAR ONE";
+    const char *t = T("NO FAVOURITES YET"), *h = T("PRESS X FOR ALL CHANNELS, THEN Y TO STAR ONE");
     osd_text_shadow(s, L + (R - L - osd_text_width(t, 2)) / 2, ROW_Y + 90, t, 2, WHITE);
     osd_text(s, L + (R - L - osd_text_width(h, 1)) / 2, ROW_Y + 120, h, 1, DIM);
   }
@@ -200,7 +200,7 @@ void guide_draw(osd_surface *s, const m3u_list *l, const epg *g, const guide_vie
 
     int n = guide_cells(guide_chan(g, c), v->t0, GUIDE_SPAN, GX, GW, cells, 24);
     osd_fill(s, GX, y, GW, ROW_H - 2, TH->cell_gap, 255);          /* gaps: no info */
-    if (!n) osd_text(s, GX + 6, y + 15, "No information", 1, DIM);
+    if (!n) osd_text(s, GX + 6, y + 15, T("No information"), 1, DIM);
     for (int k = 0; k < n; k++) {
       int hl = sel && cells[k].p == focus;
       osd_fill(s, cells[k].x + 1, y, cells[k].w - 2, ROW_H - 2, hl ? GOLD : sel ? CELL_SEL : CELL, 255);
@@ -216,10 +216,11 @@ void guide_draw(osd_surface *s, const m3u_list *l, const epg *g, const guide_vie
     osd_fill(s, x - 1, RULER_Y + 18, 2, GUIDE_ROWS * ROW_H, OSD_RGB(255, 80, 80), 255);
   }
   int hy = ROW_Y + GUIDE_ROWS * ROW_H + 6;
-  if (!v->star) osd_text(s, L, hy, "UP/DN CH  LEFT/RIGHT TIME  A WATCH  B CLOSE", 1, DIM);
-  else if (!v->favs) osd_text(s, L, hy, "UP/DN CH  LEFT/RIGHT TIME  A WATCH  Y STAR  X FAVOURITES  B CLOSE", 1, DIM);
+  if (!v->star) osd_text(s, L, hy, T("UP/DN CH  LEFT/RIGHT TIME  A WATCH  B CLOSE"), 1, DIM);
+  else if (!v->favs) osd_text(s, L, hy, T("UP/DN CH  LEFT/RIGHT TIME  A WATCH  Y STAR  X FAVOURITES  B CLOSE"), 1, DIM);
   else {
-    osd_text(s, L, hy, OSD_STAR " FAVOURITES", 1, GOLD);
-    osd_text(s, L + 13 * 8, hy, count ? "UP/DN CH  LEFT/RIGHT TIME  A WATCH  Y UNSTAR  X ALL" : "X ALL CHANNELS  B CLOSE", 1, DIM);
+    int w = osd_text(s, L, hy, OSD_STAR, 1, GOLD) + 8;
+    w += osd_text(s, L + w, hy, T("FAVOURITES"), 1, GOLD) + 16;
+    osd_text(s, L + w, hy, count ? T("UP/DN CH  LEFT/RIGHT TIME  A WATCH  Y UNSTAR  X ALL") : T("X ALL CHANNELS  B CLOSE"), 1, DIM);
   }
 }
