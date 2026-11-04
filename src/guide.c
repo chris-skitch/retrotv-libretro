@@ -196,7 +196,7 @@ void guide_draw(osd_surface *s, const m3u_list *l, const epg *g, const guide_vie
     label(c->name, name, sizeof(name), (CH_W - 12) / 8);
     osd_text_shadow(s, L + 6, y + (s->vshift ? 2 : 4), num, 2, i == playing ? GOLD : YELLOW);
     osd_text(s, L + 6, y + (s->vshift ? 20 : 24), name, 1, WHITE);   /* 1x is 8 rows tall in 240p */
-    if (v->star && v->star(i)) osd_text_shadow(s, L + CH_W - 22, y + (s->vshift ? 2 : 4), "*", 2, GOLD);
+    if (v->star && !v->favs && v->star(i)) osd_text_shadow(s, L + CH_W - 22, y + (s->vshift ? 2 : 4), "*", 2, GOLD);   /* in the favourites view every row is one */
 
     int n = guide_cells(guide_chan(g, c), v->t0, GUIDE_SPAN, GX, GW, cells, 24);
     osd_fill(s, GX, y, GW, ROW_H - 2, TH->cell_gap, 255);          /* gaps: no info */
