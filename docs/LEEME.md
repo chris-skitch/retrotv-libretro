@@ -66,9 +66,10 @@ prueba la imagen, el sonido y el estéreo.
 
 ## Idioma
 
-En el menú de ReplayOS durante el juego: **System Settings → Language / Idioma → Español**.
+En el menú de ReplayOS durante el juego: **System Settings → Language / Idioma → Espanol**.
 Las pantallas de RetroTV cambian al momento; los nombres del propio menú System Settings
-cambian la próxima vez que abras RetroTV. El mando del móvil usa el idioma del teléfono.
+cambian la próxima vez que abras RetroTV, y salen sin tildes ni eñes porque la letra del
+menú de ReplayOS no las tiene. El mando del móvil usa el idioma del teléfono.
 
 ## Controles
 

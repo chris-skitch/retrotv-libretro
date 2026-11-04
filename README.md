@@ -167,7 +167,7 @@ watch: they apply immediately and last until you quit.
 
 | Group | Setting | Choices |
 |---|---|---|
-| Language / Idioma | Language / Idioma | English, Español (the screens change at once; this menu's names when RetroTV next starts) |
+| Language / Idioma | Language / Idioma | English, Espanol (the screens change at once; this menu's names when RetroTV next starts, without accents: ReplayOS's menu font has none) |
 | Picture | Overscan margin | None, 5 %, 10 % (shrinks the video so its edges stay visible) |
 | | Picture | Fit, Zoom (default for channels you haven't zoomed) |
 | | Remember zoom per channel | On, Off |

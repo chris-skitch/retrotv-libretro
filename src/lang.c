@@ -243,6 +243,7 @@ static int cur;
 static size_t order[NES];          /* ES sorted by strcmp (the table is sorted by eye, not by byte) */
 static int sorted;
 static char *latin1[NES];          /* Latin-1 copies of ES[].es, made when first shown */
+static char *ascii[NES];           /* ASCII copies for the frontend's menus */
 
 static int cmp_order(const void *a, const void *b) { return strcmp(ES[*(const size_t *)a].en, ES[*(const size_t *)b].en); }
 
@@ -272,7 +273,15 @@ const char *TU(const char *en)
 {
   if (cur == LANG_EN || !en) return en;
   long i = find(en);
-  return i < 0 ? en : ES[i].es;
+  if (i < 0) return en;
+  if (!ascii[i]) {
+    size_t n = strlen(ES[i].es) + 1;
+    char *t = malloc(n);
+    if (!t) return en;
+    epg_ascii(ES[i].es, t, n);
+    ascii[i] = t;
+  }
+  return ascii[i];
 }
 
 const char *T(const char *en)

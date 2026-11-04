@@ -15,7 +15,7 @@ typedef struct {
 } opt_def;
 
 static const struct { const char *key, *desc, *info; } CATS[] = {
-  { "language", "Language / Idioma", "English or Spanish. / Inglés o español." },   /* both languages: findable either way */
+  { "language", "Language / Idioma", "English or Spanish. / Ingles o espanol." },   /* both languages: findable either way */
   { "picture", "Picture", "Video size, zoom and refresh rate." },
   { "sound", "Sound", "Volume leveller and tuning sounds." },
   { "interface", "Interface", "Banner, clock and on-screen hints." },
@@ -26,8 +26,8 @@ static const struct { const char *key, *desc, *info; } CATS[] = {
 static const opt_def OPTS[] = {
   /* first and in both languages, so it's easy to find whichever is on */
   { "retrotv_language", "Language / Idioma",
-    "RetroTV's screens and menus. The names in this menu follow when RetroTV next starts. / Pantallas y menús de RetroTV. Los nombres de este menú cambian al volver a abrir RetroTV.",
-    "language", "en", { { "en", "English" }, { "es", "Español" } } },
+    "RetroTV's screens and menus. The names in this menu follow when RetroTV next starts. / Pantallas y menus de RetroTV. Los nombres de este menu cambian al volver a abrir RetroTV.",
+    "language", "en", { { "en", "English" }, { "es", "Espanol" } } },   /* ASCII: ReplayOS's menu font has no accents */
   { "retrotv_overscan", "Overscan margin",
     "Shrink the video so its edges stay visible on screens that cut them off. Menus are always inside the safe area.",
     "picture", "0", { { "0", "None" }, { "5", "5%" }, { "10", "10%" } } },

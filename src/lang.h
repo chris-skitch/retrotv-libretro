@@ -21,7 +21,9 @@ int lang_parse(const char *code);
 /* en in the current language as Latin-1 text for osd_text (en itself when
  * English or untranslated). The pointer stays valid until the program ends. */
 const char *T(const char *en) __attribute__((format_arg(1)));
-/* the same in UTF-8, for the frontend's menus (core options) */
+/* the same in plain ASCII (accents dropped, n for n tilde), for the frontend's
+ * menus: ReplayOS's menu font cuts text at the first other character
+ * ("ESPA" for ESPAÑOL) */
 const char *TU(const char *en) __attribute__((format_arg(1)));
 
 /* day (0 = Sunday) and month (0 = January) abbreviations in capitals, Latin-1 */

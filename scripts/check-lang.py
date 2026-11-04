@@ -37,7 +37,7 @@ def code_keys():
     body = text[text.index("static const opt_def OPTS[]"):]
     for m in re.finditer(r'\{\s*"[^"]*",\s*' + STR + r'\s*\}', body):   # { "value", "label" }
         label = unescape(m.group(1))
-        if label not in ("English", "Español"):
+        if label not in ("English", "Espanol"):
             keys.setdefault(label, "src/options.c")
     return keys
 

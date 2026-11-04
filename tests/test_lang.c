@@ -12,7 +12,8 @@ int main(void)
   CHECK(!strcmp(T("NO SIGNAL"), "NO SIGNAL"));                     /* English: the key itself */
   lang_set(LANG_ES);
   CHECK(!strcmp(T("NO SIGNAL"), "SIN SE\xd1" "AL"));               /* Latin-1 for the TV font */
-  CHECK(!strcmp(TU("NO SIGNAL"), "SIN SE\xc3\x91" "AL"));          /* UTF-8 for the frontend */
+  CHECK(!strcmp(TU("NO SIGNAL"), "SIN SENAL"));                    /* ASCII for the frontend's menus */
+  CHECK(!strcmp(TU("Updates"), "Actualizaciones") && !strcmp(TU("Clock"), "Reloj"));
   CHECK(T("NO SIGNAL") == T("NO SIGNAL"));                         /* made once */
   CHECK(!strcmp(T("not in the table"), "not in the table"));
   char buf[64];
