@@ -34,7 +34,7 @@ typedef struct {
   const size_t *rows;              /* playlist index of each row (e.g. favourites only); NULL: every channel */
   size_t nrows;
   int (*star)(size_t ch);          /* favourite mark and the Y/X hints; NULL: none */
-  int favs;                        /* the rows are the favourites: hint line, no stars */
+  int favs;                        /* the rows are the favourites (hint line) */
 } guide_view;
 
 /* Guide data for a playlist channel (tvg-id, number, then name). */
