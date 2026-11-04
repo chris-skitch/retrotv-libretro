@@ -106,6 +106,16 @@ int main(void)
   CHECK(c.kind == RC_PLAY && c.screen == 2);
   remote_parse("GET /live/ HTTP/1.1\r\n", &c);
   CHECK(c.kind == RC_LIVE);
+  remote_parse("GET /fav?ch=36&on=1 HTTP/1.1\r\n", &c);
+  CHECK(c.kind == RC_FAV && c.fav == 1 && !strcmp(c.ch, "36"));
+  remote_parse("GET /fav?on=0&ch=7 HTTP/1.1\r\n", &c);
+  CHECK(c.kind == RC_FAV && c.fav == 0 && !strcmp(c.ch, "7"));
+  remote_parse("GET /fav?ch=36 HTTP/1.1\r\n", &c);                 /* on= is needed */
+  CHECK(c.kind == RC_BAD);
+  remote_parse("GET /fav?ch=36&on=yes HTTP/1.1\r\n", &c);
+  CHECK(c.kind == RC_BAD);
+  remote_parse("GET /fav?on=1 HTTP/1.1\r\n", &c);
+  CHECK(c.kind == RC_BAD);
   remote_parse("GET /pause?screen=9 HTTP/1.1\r\n", &c);
   CHECK(c.kind == RC_BAD);
   remote_parse("GET /focus HTTP/1.1\r\n", &c);

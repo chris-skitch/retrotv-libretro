@@ -140,7 +140,7 @@ Button names are the labels on an Xbox-style pad.
 | Y | Zoom: letterboxed (Fit) or fill the screen (Zoom), remembered per channel |
 | X | Menu: pause / back to live, sleep timer, audio track, volume leveller, Fit/Zoom, 480/240p, update, test card, controls (with two screens: Screen 2 on/off and Swap screens instead of 480/240p) |
 | Start | TV guide: Up/Down channel, Left/Right 30 minutes, A to watch, B to close |
-| Select | Channel list: Up/Down one channel, Left/Right a page, A to watch, B to close |
+| Select | Channel list: Up/Down one channel, Left/Right a page, A to watch, B to close; Y stars a channel as a favourite, X shows the favourites only (or every channel again) |
 | R2 / L2 | Pause (a VCR-style still frame, or a clean still: *Paused picture* option) and play on (the channel keeps arriving in memory: up to about 15 minutes at 8–10 Mbit/s, less with both screens paused; it plays on by itself when full) / back to live. Also in the X menu |
 | Left / Right | With [two screens](#two-screens): move the focus (and the sound) to screen 1 / screen 2 |
 
@@ -252,7 +252,8 @@ open `http://<your-pi>:7474/` in the browser (add it to your home screen for one
 tap). You get the channel on now; CH up/down, LAST, PAUSE/PLAY and LIVE buttons; with
 two screens, SCREEN 1 / SCREEN 2 and SWAP; and every channel with what's on now and
 next, with the programme's picture from the guide (or the channel logo). Tap a channel
-to watch it, or search by channel or programme. The ⚙ button opens the quick settings:
+to watch it, or search by channel or programme. Tap ☆ to make a channel a favourite
+(the same stars as on the TV) and ★ next to the search box to show the favourites only. The ⚙ button opens the quick settings:
 sleep timer, audio track, volume leveller, Fit/Zoom and 480/240p, the same as the X menu
 on the TV (with two screens, for either screen). When a newer RetroTV is out, an INSTALL
 button appears.
@@ -269,7 +270,8 @@ button appears.
 | `/up`, `/down`, `/last` | channel up, down, previous |
 | `/pause`, `/play`, `/live` | pause the channel (it keeps arriving in memory, up to about 15 minutes), play on from there, or go back to live. `/status` shows `paused` and `behind` (seconds) |
 | `/status` | what's on, as JSON: channel, name, state, programme now and next |
-| `/channels` | every channel (number, name, group, logo) with Now/Next, their times and poster images, as JSON |
+| `/channels` | every channel (number, name, group, logo, favourite) with Now/Next, their times and poster images, as JSON |
+| `/fav?ch=36&on=1` | star channel 36 as a favourite; `on=0` unstars it |
 | `/settings` | sleep timer, audio track, volume leveller, picture and output, as JSON |
 | `/set?sleep=30&leveller=loud` | change settings: `sleep` (0, 15, 30, 60, 90), `audio` (track 1, 2, ...), `leveller` (off, normal, loud), `picture` (fit, zoom), `output` (480, 240) |
 | `/help` | this list, as text |
