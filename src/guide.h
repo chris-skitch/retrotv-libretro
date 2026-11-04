@@ -31,12 +31,16 @@ typedef struct {
   size_t top;                      /* first channel row on screen */
   time_t t0;                       /* left edge of the grid */
   int clock24;                     /* 24 h times, else 12 h */
+  const size_t *rows;              /* playlist index of each row (e.g. favourites only); NULL: every channel */
+  size_t nrows;
+  int (*star)(size_t ch);          /* favourite mark and the Y/X hints; NULL: none */
+  int favs;                        /* the rows are the favourites (hint line) */
 } guide_view;
 
 /* Guide data for a playlist channel (tvg-id, number, then name). */
 const epg_chan *guide_chan(const epg *g, const m3u_channel *c);
 
-/* Keep sel on screen. */
+/* Keep sel on screen. sel and top count rows (playlist indexes unless rows is set). */
 void guide_scroll(guide_view *v, size_t count);
 
 /* The programme the cursor is on: on the highlighted channel at max(now, t0). */

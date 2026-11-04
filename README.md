@@ -134,13 +134,13 @@ Button names are the labels on an Xbox-style pad.
 
 | Button | Action |
 |---|---|
-| Up / Down (or R / L) | Channel up / down |
+| Up / Down (or R / L) | Channel up / down (favourites only while the favourites view is on) |
 | A | What's on (banner) |
 | B | Last channel |
 | Y | Zoom: letterboxed (Fit) or fill the screen (Zoom), remembered per channel |
 | X | Menu: pause / back to live, sleep timer, audio track, volume leveller, Fit/Zoom, 480/240p, update, test card, controls (with two screens: Screen 2 on/off and Swap screens instead of 480/240p) |
-| Start | TV guide: Up/Down channel, Left/Right 30 minutes, A to watch, B to close |
-| Select | Channel list: Up/Down one channel, Left/Right a page, A to watch, B to close; Y stars a channel as a favourite, X shows the favourites only (or every channel again) |
+| Start | TV guide: Up/Down channel, Left/Right 30 minutes, A to watch, B to close; Y and X as in the channel list |
+| Select | Channel list: Up/Down one channel, Left/Right a page, A to watch, B to close; Y stars a channel as a favourite, X shows the favourites only (or every channel again). The favourites view is shared by the list, the guide and channel up/down, and remembered for each line-up |
 | R2 / L2 | Pause (a VCR-style still frame, or a clean still: *Paused picture* option) and play on (the channel keeps arriving in memory: up to about 15 minutes at 8–10 Mbit/s, less with both screens paused; it plays on by itself when full) / back to live. Also in the X menu |
 | Left / Right | With [two screens](#two-screens): move the focus (and the sound) to screen 1 / screen 2 |
 

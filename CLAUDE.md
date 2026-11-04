@@ -94,7 +94,7 @@ features are configured in Dispatcharr and selected through the playlist URL:
 | `src/options.c` | core options table (v2 with v0 fallback) → `rtv_options` |
 | `src/osd.c/.h`, `src/theme.c` | software overlay on XRGB8888 (8x8 public-domain font; `vshift` for 240p), tuning static and the paused-VHS effect (`osd_vhs_pause`, applied in place to the held frame every frame), colour themes |
 | `src/vsmooth.c` | video timestamp smoothing (jittery sources broke the 2-3 cadence of 24 fps on 60 Hz) and frame-rate checks: a declared rate outside 5-120 fps (e.g. a 90 kHz "tbr") is ignored and the rate is measured from frame gaps |
-| `src/aspect.c`, `src/loud.c`, `src/lastch.c`, `src/onboard.c`, `src/testcard.c` | bar detection and zoom crop, volume leveller (AGC), last channel, per-channel zoom and favourites (`chanpref`; `pub_fav` mirrors the stars for the remote server), setup-screen hints, test card |
+| `src/aspect.c`, `src/loud.c`, `src/lastch.c`, `src/onboard.c`, `src/testcard.c` | bar detection and zoom crop, volume leveller (AGC), last channel, per-channel zoom and favourites (`chanpref`; `pub_fav` mirrors the stars for the remote server; the favourites view `list_favs` is shared by the list, the guide's `rows` map and `chan_step`), setup-screen hints, test card |
 | `tests/harness.c` | headless libretro frontend: real-time pacing, scripted buttons, PNG screenshots, `HARNESS_OPTS`, save dir |
 | `tests/demo/` | demo line-up for screenshots: made-up channels, generated video and guide |
 

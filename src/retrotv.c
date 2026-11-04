@@ -72,7 +72,9 @@ static char fav_path[1100];
 static int fav_save;
 static atomic_uchar *pub_fav;      /* favourite flag per channel: set here, read by the remote server too */
 static size_t *lv;                 /* the channel list's rows: every channel, or the favourites */
-static int list_favs;              /* the channel list shows favourites only (X) */
+static int list_favs;              /* the channel list and the guide show favourites only (X) */
+static char favview_path[1100];    /* remembers list_favs per line-up */
+static int favview_save;
 static double stream_fps;          /* fps of the channel playing now (for the refresh option) */
 static uint64_t audio_sent, audio_taken;   /* frames offered to / accepted by the frontend */
 static int audio_logged;
@@ -481,11 +483,46 @@ static size_t list_rows(void)
   return n;
 }
 
-/* the cursor's row: the first one at or after it when it isn't shown (unstarred, or X) */
-static size_t list_pos(size_t n)
+/* the row of channel ch: the first one at or after it when it isn't shown (unstarred, or X) */
+static size_t row_of(size_t n, size_t ch)
 {
-  for (size_t k = 0; k < n; k++) if (lv[k] >= list_cursor) return k;
+  for (size_t k = 0; k < n; k++) if (lv[k] >= ch) return k;
   return 0;
+}
+static size_t list_pos(size_t n) { return row_of(n, list_cursor); }
+
+static void set_favview(int on)                      /* X in the list or the guide; remembered */
+{
+  list_favs = on;
+  favview_save = 1;
+}
+
+/* channel up (+1) or down (-1): through the favourites while that view is on (X in the list
+ * or the guide) and has any, else through every channel */
+static size_t chan_step(int dir)
+{
+  size_t n = chans.count, i = cur;
+  int favs = 0;
+  for (size_t k = 0; list_favs && k < n && !favs; k++) favs = is_fav(k);
+  for (size_t k = 0; k < n; k++) {
+    i = dir > 0 ? (i + 1) % n : i ? i - 1 : n - 1;
+    if (!favs || is_fav(i)) return i;
+  }
+  return cur;
+}
+
+static size_t guide_ch;                              /* the guide's highlighted channel (playlist index) */
+/* the guide's rows are the channel list's: every channel or the favourites */
+static size_t guide_sync(void)
+{
+  size_t n = list_rows();
+  gv.rows = lv;
+  gv.nrows = lv ? n : chans.count;
+  gv.star = is_fav;
+  gv.favs = list_favs;
+  gv.sel = lv ? row_of(n, guide_ch) : guide_ch;
+  guide_scroll(&gv, gv.nrows);
+  return gv.nrows;
 }
 
 static void draw_list(osd_surface *s)
@@ -572,7 +609,7 @@ static void draw_welcome(osd_surface *s)
   osd_text_shadow(s, x + 24, y + 18, "WELCOME TO RETROTV", 2, TH->title);
   static const char *rows[][2] = {
     { "UP / DOWN", "change channel" }, { "A", "what's on (banner)" }, { "B", "last channel" },
-    { "Y", "zoom / fit picture" }, { "X", "menu: sleep, audio, leveller, test card" }, { "START", "TV guide" },
+    { "Y", "zoom / fit picture" }, { "X", "menu: sleep, audio, leveller, test card" }, { "START", "TV guide (Y: star, X: favourites)" },
     { "SELECT", "channel list (Y: star, X: favourites)" },
     { "R2 / L2", "pause, play / back to live" },
     { "LEFT/RIGHT", "screen 1 / screen 2 (sound follows)" },
@@ -1014,6 +1051,10 @@ static void last_init(const char *src)
   pub_fav = calloc(chans.count, sizeof(*pub_fav));
   lv = calloc(chans.count, sizeof(*lv));
   for (size_t i = 0; pub_fav && i < chans.count; i++) atomic_store(&pub_fav[i], chanpref_get(&fprefs, &chans.ch[i]) == 1);
+  snprintf(favview_path, sizeof(favview_path), "%s/retrotv-favview-%08x.txt", dir, (unsigned)lastch_hash(src));
+  char *vt = slurp(favview_path, 64);
+  list_favs = vt && strstr(vt, "favourites=on") != NULL;
+  free(vt);
   snprintf(last_path, sizeof(last_path), "%s/retrotv-last-%08x.txt", dir, (unsigned)lastch_hash(src));
   logf_(RETRO_LOG_INFO, "last channel file: %s", last_path);
 }
@@ -2017,8 +2058,8 @@ static void remote_apply_settings(void)
 /* tune on the screen in the globals (a remote press) */
 static void remote_tune_here(int kind, size_t idx)
 {
-  if (kind == RQ_UP) idx = (cur + 1) % chans.count;
-  else if (kind == RQ_DOWN) idx = cur ? cur - 1 : chans.count - 1;
+  if (kind == RQ_UP) idx = chan_step(1);
+  else if (kind == RQ_DOWN) idx = chan_step(-1);
   else if (kind == RQ_LAST) idx = prev;
   if (idx >= chans.count) return;
   if (idx == cur && !asleep && !testcard_on && player_get_state(pl) != PLAYER_ERROR) {
@@ -2230,12 +2271,18 @@ static void handle_input(void)
   }
   if (guide_open) {
     time_t now = time(NULL), first = guide_slot(now) - GUIDE_STEP, last = now + 24 * 3600;
-    if (PRESSED(UP))    gv.sel = gv.sel ? gv.sel - 1 : chans.count - 1;
-    if (PRESSED(DOWN))  gv.sel = (gv.sel + 1) % chans.count;
+    size_t n = guide_sync(), pos = gv.sel;
+    if (n) {
+      if (PRESSED(UP))    pos = pos ? pos - 1 : n - 1;
+      if (PRESSED(DOWN))  pos = (pos + 1) % n;
+      guide_ch = gv.rows ? gv.rows[pos] : pos;
+      if (FACE(PAD_Y)) set_fav(guide_ch, !is_fav(guide_ch));
+      if (FACE(PAD_A)) { guide_open = 0; if (guide_ch != cur) tune(guide_ch); }
+    }
     if (PRESSED(LEFT) && gv.t0 - GUIDE_STEP >= first) gv.t0 -= GUIDE_STEP;
     if (PRESSED(RIGHT) && gv.t0 + GUIDE_STEP <= last) gv.t0 += GUIDE_STEP;
-    guide_scroll(&gv, chans.count);
-    if (FACE(PAD_A)) { guide_open = 0; if (gv.sel != cur) tune(gv.sel); }
+    if (FACE(PAD_X)) set_favview(!list_favs);         /* favourites only / every channel */
+    guide_sync();
     if (FACE(PAD_B) || PRESSED(START)) guide_open = 0;
     return;
   }
@@ -2250,12 +2297,12 @@ static void handle_input(void)
       if (FACE(PAD_Y)) set_fav(list_cursor, !is_fav(list_cursor));   /* the row's star shows it */
       if (FACE(PAD_A)) { list_open = 0; tune(list_cursor); }
     }
-    if (FACE(PAD_X)) list_favs ^= 1;                 /* favourites only / every channel */
+    if (FACE(PAD_X)) set_favview(!list_favs);         /* favourites only / every channel */
     if (FACE(PAD_B) || PRESSED(SELECT)) list_open = 0;
     return;
   }
-  if (PRESSED(UP) || PRESSED(R))   tune((cur + 1) % chans.count);
-  if (PRESSED(DOWN) || PRESSED(L)) tune(cur ? cur - 1 : chans.count - 1);
+  if (PRESSED(UP) || PRESSED(R))   tune(chan_step(1));
+  if (PRESSED(DOWN) || PRESSED(L)) tune(chan_step(-1));
   if (FACE(PAD_B))     tune(prev);
   if (FACE(PAD_A))     banner_until = t_now() + (opts.banner_secs > 0 ? opts.banner_secs : INFO_SECONDS);
   if (PRESSED(SELECT)) { list_open = 1; list_cursor = cur; }
@@ -2264,10 +2311,11 @@ static void handle_input(void)
   if (FACE(PAD_X)) { qm_open = 1; qm_sel = 0; }
   if (PRESSED(START)) {
     guide_open = 1;
-    gv.sel = cur;
+    guide_ch = cur;
     gv.t0 = guide_slot(time(NULL));
-    gv.top = cur > 2 ? cur - 2 : 0;                  /* a little context above */
-    guide_scroll(&gv, chans.count);
+    guide_sync();
+    gv.top = gv.sel > 2 ? gv.sel - 2 : 0;            /* a little context above */
+    guide_sync();
   }
   if (PRESSED(R2)) { player_shift sh; player_get_shift(pl, &sh); set_pause(!sh.paused); }
   if (PRESSED(L2)) go_live();
@@ -2445,7 +2493,10 @@ RETRO_API void retro_unload_game(void)
   zoom_path[0] = '\0';
   chanpref_free(&fprefs);
   fav_path[0] = '\0';
-  fav_save = list_favs = 0;
+  fav_save = list_favs = favview_save = 0;
+  favview_path[0] = '\0';
+  gv.rows = NULL;
+  gv.nrows = 0;
   free(pub_fav);                                     /* the server is stopped */
   pub_fav = NULL;
   free(lv);
@@ -2539,6 +2590,7 @@ RETRO_API void retro_run(void)
     if (zt && !save_text_async(zoom_path, zt)) zoom_save = 0;
     free(zt);
   }
+  if (favview_save && !save_text_async(favview_path, list_favs ? "favourites=on\n" : "favourites=off\n")) favview_save = 0;
   if (fav_save) {
     char *ft = chanpref_format(&fprefs);
     if (ft && !save_text_async(fav_path, ft)) fav_save = 0;
@@ -2572,6 +2624,7 @@ RETRO_API void retro_run(void)
   if (welcome_on) draw_welcome(&s);
   else if (qm_open) draw_qmenu(&s);
   else if (guide_open) {
+    guide_sync();                                    /* a star from the phone may change the rows */
     pthread_mutex_lock(&guide_mu);
     guide_draw(&s, &chans, guide, &gv, cur, time(NULL));
     pthread_mutex_unlock(&guide_mu);
