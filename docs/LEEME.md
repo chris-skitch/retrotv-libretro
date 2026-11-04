@@ -81,10 +81,10 @@ Los nombres de los botones son los de un mando tipo Xbox.
 | A | Qué echan ahora (banner) |
 | B | Canal anterior |
 | Y | Zoom: ajustar la imagen con bandas negras o llenar la pantalla; se recuerda por canal |
-| X | Menú: pausa / directo, apagado automático, pista de audio, nivelador, imagen, actualizar, carta de ajuste |
+| X | Menú: apagado automático, pista de audio, nivelador, imagen, actualizar, carta de ajuste |
 | Start | Guía de TV: Arriba/Abajo canal, Izquierda/Derecha media hora, A para verlo, B para cerrar |
-| Select | Lista de canales: Arriba/Abajo un canal, Izquierda/Derecha una página, A para verlo, B para cerrar |
-| R2 / L2 | Pausa (hasta unos 15 minutos) y seguir / volver al directo |
+| Select | Lista de canales: Arriba/Abajo un canal, L2/R2 una página, A para verlo, B para cerrar |
+| R2 / L2 | Pausa (hasta unos 15 minutos) y seguir / volver al directo; en la lista de canales, página arriba / abajo |
 
 **Favoritos.** En la lista de canales o en la guía, **Y** marca un canal como favorito
 (o lo quita) y **X** muestra solo los favoritos. Mientras esa vista está activa, subir y

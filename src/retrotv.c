@@ -111,7 +111,7 @@ static uint32_t noise_seed = 12345;
 static int list_open;
 static int guide_open;              /* TV guide screen (Start) */
 static int qm_open, qm_sel;          /* quick menu (X) */
-enum { QM_PAUSE, QM_LIVE, QM_SLEEP, QM_AUDIO, QM_LEVEL, QM_ZOOM, QM_OUTPUT, QM_SCREEN2, QM_SWAP, QM_UPDATE, QM_TESTCARD, QM_HELP, QM_CLOSE, QM_ROWS };
+enum { QM_SLEEP, QM_AUDIO, QM_LEVEL, QM_ZOOM, QM_OUTPUT, QM_SCREEN2, QM_SWAP, QM_UPDATE, QM_TESTCARD, QM_HELP, QM_CLOSE, QM_ROWS };
 static int qm_rows[QM_ROWS], qm_n;     /* the rows shown: Output in single mode, Screen 2 / Swap in dual mode */
 static int sleep_min;                /* sleep timer setting, minutes (0 = off) */
 static double sleep_at;              /* t_now() when the set switches off (0 = no timer) */
@@ -468,7 +468,7 @@ static void draw_banner(osd_surface *s, player_state st)
   if (opts.hints) osd_text(s, nx, y + 16, T("A INFO  B LAST  Y ZOOM  X MENU  START GUIDE"), 1, TH->muted);
 }
 
-#define LIST_ROWS 12                   /* channels per page of the list (Left/Right page) */
+#define LIST_ROWS 12                   /* channels per page of the list (L2/R2 page) */
 static int is_fav(size_t i) { return pub_fav && i < chans.count && atomic_load(&pub_fav[i]); }
 /* the favourites-only view is on (Favourites off in System Settings: never; the stars stay saved) */
 static int favs_view(void) { return opts.favourites && list_favs; }
@@ -537,8 +537,8 @@ static void draw_list(osd_surface *s)
   osd_fill(s, x, y, w, 36 + rows * rh, TH->bg, 230);
   osd_fill(s, x, y, w, 30, TH->accent, 255);
   osd_text(s, x + 12, y + 8, favs_view() ? T("FAVOURITES") : T("CHANNEL LIST"), 2, TH->on_accent);
-  const char *hint = !opts.favourites ? T("LEFT/RIGHT PAGE") : !list_favs ? T("Y STAR  X FAVOURITES  L/R PAGE")
-                   : n ? T("Y UNSTAR  X ALL  L/R PAGE") : T("X ALL CHANNELS");
+  const char *hint = !opts.favourites ? T("L2/R2 PAGE") : !list_favs ? T("Y STAR  X FAVOURITES  L2/R2 PAGE")
+                   : n ? T("Y UNSTAR  X ALL  L2/R2 PAGE") : T("X ALL CHANNELS");
   osd_text(s, x + w - 12 - osd_text_width(hint, 1), y + 12, hint, 1, TH->on_accent);
   if (!n) {
     const char *t = T("NO FAVOURITES YET"), *h = T("PRESS X FOR ALL CHANNELS, THEN Y TO STAR ONE");
@@ -616,7 +616,7 @@ static void draw_welcome(osd_surface *s)
   static const char *rows[][2] = {
     { N_("UP / DOWN"), N_("change channel") }, { "A", N_("what's on (banner)") }, { "B", N_("last channel") },
     { "Y", N_("zoom / fit picture") }, { "X", N_("menu: sleep, audio, leveller, test card") }, { "START", N_("TV guide") },
-    { "SELECT", N_("channel list (left/right: a page)") },
+    { "SELECT", N_("channel list (L2/R2: a page)") },
     { "R2 / L2", N_("pause, play / back to live") },
     { N_("LEFT/RIGHT"), N_("screen 1 / screen 2 (sound follows)") },
   };
@@ -1417,10 +1417,7 @@ static void shift_tick(void)
 static void qm_build(void)
 {
   qm_n = 0;
-  player_shift sh;
-  player_get_shift(pl, &sh);
   for (int r = 0; r < QM_ROWS; r++) {
-    if (r == QM_LIVE && !sh.paused && sh.behind < 1) continue;
     if (r == QM_OUTPUT && dual) continue;             /* two screens: System Settings, at start */
     if (r == QM_SCREEN2 && !dual) continue;
     if (r == QM_SWAP && !(dual && screen2_on)) continue;
@@ -1445,19 +1442,7 @@ static void draw_qmenu(osd_surface *s)
     char val[32] = "";
     int ry = y + 38 + i * rh, dim = 0;
     const char *label = "";
-    player_shift sh;
-    player_get_shift(pl, &sh);
     switch (r) {
-    case QM_PAUSE: {
-      char b[16];
-      label = T("Pause");
-      mmss(sh.paused ? sh.paused_for : sh.behind, b, sizeof(b));
-      if (sh.paused) snprintf(val, sizeof(val), T("Paused %s"), b);
-      else if (sh.behind >= 1) snprintf(val, sizeof(val), T("Playing -%s"), b);
-      else snprintf(val, sizeof(val), "%s", T("Live"));
-      break;
-    }
-    case QM_LIVE: label = T("Back to live"); break;
     case QM_UPDATE: {
       label = T("Update");
       pthread_mutex_lock(&upd_mu);
@@ -2270,8 +2255,6 @@ static void handle_input(void)
     if (PRESSED(DOWN)) qm_sel = (qm_sel + 1) % qm_n;
     int row = qm_rows[qm_sel];
     int dir = PRESSED(LEFT) ? -1 : PRESSED(RIGHT) ? 1 : FACE(PAD_A) ? 1 : 0;
-    if (dir && row == QM_PAUSE) { player_shift sh; player_get_shift(pl, &sh); set_pause(!sh.paused); }
-    if (FACE(PAD_A) && row == QM_LIVE) { go_live(); qm_open = 0; }
     if (dir && row == QM_SLEEP) step_sleep(dir);
     if (dir && row == QM_AUDIO) step_audio(dir);
     if (dir && row == QM_LEVEL) step_leveller(dir);
@@ -2307,8 +2290,8 @@ static void handle_input(void)
     if (n) {
       if (PRESSED(UP))   pos = pos ? pos - 1 : n - 1;
       if (PRESSED(DOWN)) pos = (pos + 1) % n;
-      if (PRESSED(LEFT))  pos = pos > LIST_ROWS ? pos - LIST_ROWS : 0;          /* a page up */
-      if (PRESSED(RIGHT)) pos = pos + LIST_ROWS < n ? pos + LIST_ROWS : n - 1;
+      if (PRESSED(L2)) pos = pos > LIST_ROWS ? pos - LIST_ROWS : 0;           /* a page up */
+      if (PRESSED(R2)) pos = pos + LIST_ROWS < n ? pos + LIST_ROWS : n - 1;
       list_cursor = lv[pos];
       if (opts.favourites && FACE(PAD_Y)) set_fav(list_cursor, !is_fav(list_cursor));   /* the row's star shows it */
       if (FACE(PAD_A)) { list_open = 0; tune(list_cursor); }
