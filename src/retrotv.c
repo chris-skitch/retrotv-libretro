@@ -189,6 +189,7 @@ enum { RQ_TUNE = 1, RQ_UP, RQ_DOWN, RQ_LAST, RQ_FOCUS, RQ_PAUSE, RQ_LIVE, RQ_SWA
 static atomic_int remote_req;          /* RQ(kind, screen 0 focused/1/2, channel index); 0 = nothing */
 static atomic_int pub_cur = -1;        /* channel on the focused screen, for /status */
 static atomic_int pub_dual, pub_s2on, pub_focus;       /* two screens: mode, screen 2 on, focused screen (0/1) */
+static atomic_int pub_favs;           /* Favourites on in System Settings, for /channels and /fav */
 static atomic_int pub_cur2 = -1, pub_state2;           /* the other screen's channel and state */
 static atomic_int pub_paused, pub_behind, pub_paused2, pub_behind2;   /* pause: held?, seconds behind live */
 enum { PS_TUNING, PS_PLAYING, PS_NO_SIGNAL, PS_OFF, PS_TESTCARD, PS_NO_CHANNELS };
@@ -467,6 +468,8 @@ static void draw_banner(osd_surface *s, player_state st)
 
 #define LIST_ROWS 12                   /* channels per page of the list (Left/Right page) */
 static int is_fav(size_t i) { return pub_fav && i < chans.count && atomic_load(&pub_fav[i]); }
+/* the favourites-only view is on (Favourites off in System Settings: never; the stars stay saved) */
+static int favs_view(void) { return opts.favourites && list_favs; }
 
 static void set_fav(size_t i, int on)
 {
@@ -479,7 +482,7 @@ static void set_fav(size_t i, int on)
 static size_t list_rows(void)
 {
   size_t n = 0;
-  for (size_t i = 0; lv && i < chans.count; i++) if (!list_favs || is_fav(i)) lv[n++] = i;
+  for (size_t i = 0; lv && i < chans.count; i++) if (!favs_view() || is_fav(i)) lv[n++] = i;
   return n;
 }
 
@@ -503,7 +506,7 @@ static size_t chan_step(int dir)
 {
   size_t n = chans.count, i = cur;
   int favs = 0;
-  for (size_t k = 0; list_favs && k < n && !favs; k++) favs = is_fav(k);
+  for (size_t k = 0; favs_view() && k < n && !favs; k++) favs = is_fav(k);
   for (size_t k = 0; k < n; k++) {
     i = dir > 0 ? (i + 1) % n : i ? i - 1 : n - 1;
     if (!favs || is_fav(i)) return i;
@@ -518,8 +521,8 @@ static size_t guide_sync(void)
   size_t n = list_rows();
   gv.rows = lv;
   gv.nrows = lv ? n : chans.count;
-  gv.star = is_fav;
-  gv.favs = list_favs;
+  gv.star = opts.favourites ? is_fav : NULL;           /* NULL: no stars, the plain hint line */
+  gv.favs = favs_view();
   gv.sel = lv ? row_of(n, guide_ch) : guide_ch;
   guide_scroll(&gv, gv.nrows);
   return gv.nrows;
@@ -531,8 +534,9 @@ static void draw_list(osd_surface *s)
   size_t n = list_rows(), pos = list_pos(n);
   osd_fill(s, x, y, w, 36 + rows * rh, TH->bg, 230);
   osd_fill(s, x, y, w, 30, TH->accent, 255);
-  osd_text(s, x + 12, y + 8, list_favs ? "FAVOURITES" : "CHANNEL LIST", 2, TH->on_accent);
-  const char *hint = !list_favs ? "Y STAR  X FAVOURITES  L/R PAGE" : n ? "Y UNSTAR  X ALL  L/R PAGE" : "X ALL CHANNELS";
+  osd_text(s, x + 12, y + 8, favs_view() ? "FAVOURITES" : "CHANNEL LIST", 2, TH->on_accent);
+  const char *hint = !opts.favourites ? "LEFT/RIGHT PAGE" : !list_favs ? "Y STAR  X FAVOURITES  L/R PAGE"
+                   : n ? "Y UNSTAR  X ALL  L/R PAGE" : "X ALL CHANNELS";
   osd_text(s, x + w - 12 - osd_text_width(hint, 1), y + 12, hint, 1, TH->on_accent);
   if (!n) {
     const char *t = "NO FAVOURITES YET", *h = "PRESS X FOR ALL CHANNELS, THEN Y TO STAR ONE";
@@ -551,7 +555,7 @@ static void draw_list(osd_surface *s)
     clip_copy(name, sizeof(name), chans.ch[i].name, 25);
     osd_text(s, x + 14, ry + 2, num, 2, i == cur ? TH->title : TH->sub);
     osd_text(s, x + 120, ry + 2, name, 2, TH->text);
-    if (is_fav(i)) osd_text(s, x + w - 34, ry + 2, "*", 2, TH->title);
+    if (opts.favourites && is_fav(i)) osd_text(s, x + w - 34, ry + 2, OSD_STAR, 2, TH->title);
   }
 }
 
@@ -609,15 +613,18 @@ static void draw_welcome(osd_surface *s)
   osd_text_shadow(s, x + 24, y + 18, "WELCOME TO RETROTV", 2, TH->title);
   static const char *rows[][2] = {
     { "UP / DOWN", "change channel" }, { "A", "what's on (banner)" }, { "B", "last channel" },
-    { "Y", "zoom / fit picture" }, { "X", "menu: sleep, audio, leveller, test card" }, { "START", "TV guide (Y: star, X: favourites)" },
-    { "SELECT", "channel list (Y: star, X: favourites)" },
+    { "Y", "zoom / fit picture" }, { "X", "menu: sleep, audio, leveller, test card" }, { "START", "TV guide" },
+    { "SELECT", "channel list (left/right: a page)" },
     { "R2 / L2", "pause, play / back to live" },
     { "LEFT/RIGHT", "screen 1 / screen 2 (sound follows)" },
   };
   int n = dual ? 9 : 8, more = dual ? 22 : 0;        /* the last row only with two screens */
   for (int i = 0; i < n; i++) {
+    const char *what = rows[i][1];
+    if (opts.favourites && i == 5) what = "TV guide (Y: star, X: favourites)";
+    if (opts.favourites && i == 6) what = "channel list (Y: star, X: favourites)";
     osd_text_shadow(s, x + 24, y + 52 + i * 26, rows[i][0], 2, TH->accent);
-    osd_text(s, x + 200, y + 56 + i * 26, rows[i][1], 1, TH->text);
+    osd_text(s, x + 200, y + 56 + i * 26, what, 1, TH->text);
   }
   osd_text(s, x + 24, y + 270 + more, "Settings: ReplayOS menu > System Settings", 1, TH->sub);
   osd_text_shadow(s, x + 24, y + 298 + more / 2 + 4, "Press A to start watching", 2, TH->text);
@@ -1829,7 +1836,7 @@ static int remote_answer(const remote_cmd *c, remote_buf *b, void *ctx)
   time_t t = time(NULL);
   switch (c->kind) {
   case RC_CHANNELS:                                  /* no stream URLs: they can carry tokens */
-    remote_puts(b, "{\"ok\":true,\"current\":");
+    remote_printf(b, "{\"ok\":true,\"favourites\":%s,\"current\":", atomic_load(&pub_favs) ? "true" : "false");
     remote_json(b, chans.ch[idx].number);
     remote_printf(b, ",\"time\":%lld,\"channels\":[", (long long)t);
     pthread_mutex_lock(&guide_mu);
@@ -1926,6 +1933,10 @@ static int remote_answer(const remote_cmd *c, remote_buf *b, void *ctx)
     remote_puts(b, "}");
     return 200;
   case RC_FAV:
+    if (!atomic_load(&pub_favs)) {
+      remote_puts(b, "{\"ok\":false,\"error\":\"favourites are off (System Settings)\"}");
+      return 409;
+    }
     idx = remote_find(&chans, c->ch, NULL);
     if (idx < 0) {
       remote_puts(b, "{\"ok\":false,\"error\":\"no such channel\",\"asked\":");
@@ -2132,6 +2143,7 @@ static void publish_state(void)
   atomic_store(&pub_dual, dual);
   atomic_store(&pub_s2on, screen2_on);
   atomic_store(&pub_focus, focus_side);
+  atomic_store(&pub_favs, opts.favourites);
   if (dual && screen2_on && other.pl && chans.count) {
     player_state ps = player_get_state(other.pl);
     atomic_store(&pub_state2, asleep ? PS_OFF : ps == PLAYER_PLAYING ? PS_PLAYING : ps == PLAYER_ERROR ? PS_NO_SIGNAL : PS_TUNING);
@@ -2276,12 +2288,12 @@ static void handle_input(void)
       if (PRESSED(UP))    pos = pos ? pos - 1 : n - 1;
       if (PRESSED(DOWN))  pos = (pos + 1) % n;
       guide_ch = gv.rows ? gv.rows[pos] : pos;
-      if (FACE(PAD_Y)) set_fav(guide_ch, !is_fav(guide_ch));
+      if (opts.favourites && FACE(PAD_Y)) set_fav(guide_ch, !is_fav(guide_ch));
       if (FACE(PAD_A)) { guide_open = 0; if (guide_ch != cur) tune(guide_ch); }
     }
     if (PRESSED(LEFT) && gv.t0 - GUIDE_STEP >= first) gv.t0 -= GUIDE_STEP;
     if (PRESSED(RIGHT) && gv.t0 + GUIDE_STEP <= last) gv.t0 += GUIDE_STEP;
-    if (FACE(PAD_X)) set_favview(!list_favs);         /* favourites only / every channel */
+    if (opts.favourites && FACE(PAD_X)) set_favview(!list_favs);   /* favourites only / every channel */
     guide_sync();
     if (FACE(PAD_B) || PRESSED(START)) guide_open = 0;
     return;
@@ -2294,10 +2306,10 @@ static void handle_input(void)
       if (PRESSED(LEFT))  pos = pos > LIST_ROWS ? pos - LIST_ROWS : 0;          /* a page up */
       if (PRESSED(RIGHT)) pos = pos + LIST_ROWS < n ? pos + LIST_ROWS : n - 1;
       list_cursor = lv[pos];
-      if (FACE(PAD_Y)) set_fav(list_cursor, !is_fav(list_cursor));   /* the row's star shows it */
+      if (opts.favourites && FACE(PAD_Y)) set_fav(list_cursor, !is_fav(list_cursor));   /* the row's star shows it */
       if (FACE(PAD_A)) { list_open = 0; tune(list_cursor); }
     }
-    if (FACE(PAD_X)) set_favview(!list_favs);         /* favourites only / every channel */
+    if (opts.favourites && FACE(PAD_X)) set_favview(!list_favs);   /* favourites only / every channel */
     if (FACE(PAD_B) || PRESSED(SELECT)) list_open = 0;
     return;
   }
