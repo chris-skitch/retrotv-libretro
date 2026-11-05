@@ -90,6 +90,17 @@ always your choice. It runs the release's own installer, which checks the SHA-25
 You can also update with **Extra → retrotv_update.sh**. **Uninstall** with
 **Extra → retrotv_uninstall.sh**. ReplayOS updates keep RetroTV installed.
 
+**Try a beta.** New features are tested as pre-releases (`v0.4.0-beta.1` and so on, listed on the
+[releases page](https://github.com/chris-skitch/retrotv-libretro/releases)) before everyone gets
+them. To install one, add its version to the one-liner:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chris-skitch/retrotv-libretro/main/install.sh | bash -s -- --version v0.4.0-beta.1
+```
+
+Run the plain one-liner (or **Extra → retrotv_update.sh**) to go back to the latest release. The
+update check never offers a beta, and offers the release once it's out.
+
 ## Your channels: `playlist.txt`
 
 The first line that doesn't start with `#` is your channel list: an M3U link or
