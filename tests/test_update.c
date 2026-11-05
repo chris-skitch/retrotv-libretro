@@ -25,7 +25,14 @@ int main(void)
   CHECK(update_cmp("v0.3", "0.3.0") == 0);
   CHECK(update_cmp("v0.2.10", "0.3.0") < 0);
   CHECK(update_cmp("v1.0.0", "0.9.99") > 0);
-  CHECK(update_cmp("v0.3.2-rc1", "0.3.2") == 0);
+  CHECK(update_cmp("v0.4.0-beta.1", "0.4.0") < 0);              /* a beta is older than its release */
+  CHECK(update_cmp("v0.4.0", "0.4.0-beta.1") > 0);              /* so a beta tester is offered 0.4.0 */
+  CHECK(update_cmp("v0.4.0-beta.1", "0.3.4") > 0);              /* and newer than the last release */
+  CHECK(update_cmp("v0.4.0-beta.2", "0.4.0-beta.1") > 0);
+  CHECK(update_cmp("v0.4.0-beta.10", "0.4.0-beta.9") > 0);
+  CHECK(update_cmp("v0.4.0-beta.1", "0.4.0-beta.1") == 0);
+  CHECK(update_cmp("v0.4.0-rc1", "0.4.0-beta.3") > 0);
+  CHECK(update_cmp("v0.4-beta", "0.4.0-beta") == 0);
 
   const char *sums = "aaaa  retrotv_libretro.so\nbbbb *install.sh\r\ncccc  retrotv_install.sh\n";
   CHECK(update_sums_has(sums, "retrotv_libretro.so"));

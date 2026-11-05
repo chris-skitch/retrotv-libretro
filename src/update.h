@@ -14,7 +14,8 @@
 int update_parse_tag(const char *json, char *tag, size_t n);
 
 /* Compare versions like "v0.3.10" and "0.3.9" (a leading v is ignored,
- * missing parts count as 0): <0, 0 or >0 like strcmp. */
+ * missing parts count as 0): <0, 0 or >0 like strcmp. A pre-release
+ * ("0.4.0-beta.2") is older than its release and newer than "-beta.1". */
 int update_cmp(const char *a, const char *b);
 
 /* Does SHA256SUMS text list file (as "<hash>  file" or "<hash> *file")? */
