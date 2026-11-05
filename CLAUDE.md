@@ -152,7 +152,11 @@ system list entry, load_game, sound, System Settings, two screens, last channel)
   accepted and ignored. `retrotv_uninstall.sh` removes the core, manifest and launchers.
   Storage backups use plain `cp` (the NFS share squashes root, so `cp -p` fails).
   `tests/test_install.sh` runs both against a fake ReplayOS in a user namespace (`unshare -r`).
-- **Releases:** `.github/workflows/release.yml` on a `v*` tag; bump `RETROTV_VERSION` first. Releases
+- **Releases:** `.github/workflows/release.yml` on a `v*` tag; bump `RETROTV_VERSION` first. A tag
+  with a `-` (`v0.4.0-beta.1`) is published as a GitHub pre-release: never "latest", so neither the
+  installer nor the in-core update check offers it; testers use `install.sh --version <tag>`. Betas
+  are tagged on the `dev` branch (features merged there for testing, then into `main` for the
+  release); `update_cmp` orders 0.4.0-beta.1 < 0.4.0-beta.2 < 0.4.0. Releases
   ship `install.sh` (RetroTV's in-core updater needs it). Test the installer against a local copy
   of a release with `RETROTV_BASE=file:///dir`.
 - **ReplayOS facts:** `replay.cfg` lives in memory and is written on shutdown: never edit it while
