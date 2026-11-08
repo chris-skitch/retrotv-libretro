@@ -60,7 +60,7 @@ static const opt_def OPTS[] = {
     "interface", "navy", { { "navy", "Cable Navy" }, { "teletext", "Teletext" }, { "phosphor", "Green Phosphor" } } },
   { "retrotv_favourites", "Favourites",
     "Star channels with Y in the channel list and the guide; X then shows only them, and channel up/down goes through them. Stars on the phone remote too. Off: every channel, no stars.",
-    "interface", "off", { { "off", "Off" }, { "on", "On" } } },
+    "interface", "on", { { "on", "On" }, { "off", "Off" } } },
   { "retrotv_static_style", "Tuning picture",
     "What you see while a channel tunes.",
     "interface", "classic", { { "classic", "Classic snow" }, { "vhs", "VHS" } } },
