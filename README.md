@@ -154,7 +154,7 @@ Button names are the labels on an Xbox-style pad.
 | Y | Zoom: letterboxed (Fit) or fill the screen (Zoom), remembered per channel |
 | X | Menu: sleep timer, audio track, volume leveller, Fit/Zoom, 480/240p, update, test card, controls (with two screens: Screen 2 on/off and Swap screens instead of 480/240p) |
 | Start | TV guide: Up/Down channel, Left/Right 30 minutes, A to watch, B to close; with Favourites on, Y and X as in the channel list |
-| Select | Channel list: Up/Down one channel, L2/R2 a page, A to watch, B to close. With **Favourites** on (System Settings, off by default): Y stars a channel, X shows the favourites only (or every channel again). The favourites view is shared by the list, the guide and channel up/down, and remembered for each line-up |
+| Select | Channel list: Up/Down one channel, L2/R2 a page, A to watch, B to close. With **Favourites** on (System Settings, on by default): Y stars a channel, X shows the favourites only (or every channel again). The favourites view is shared by the list, the guide and channel up/down, and remembered for each line-up |
 | R2 / L2 | Pause (a VCR-style still frame, or a clean still: *Paused picture* option) and play on (the channel keeps arriving in memory: up to about 15 minutes at 8–10 Mbit/s, less with both screens paused; it plays on by itself when full) / back to live. In the channel list: a page up / down |
 | Left / Right | With [two screens](#two-screens): move the focus (and the sound) to screen 1 / screen 2 |
 
@@ -194,7 +194,7 @@ watch: they apply immediately and last until you quit.
 | | Colour theme | Cable Navy, Teletext, Green Phosphor |
 | | Tuning picture | Classic snow, VHS |
 | | Paused picture | VHS tape (a VCR's shaky still frame with a noise bar), Still picture |
-| | Favourites | Off, On (stars and a favourites-only view in the channel list and guide, see Controls) |
+| | Favourites | On, Off (stars and a favourites-only view in the channel list and guide, see Controls) |
 | Remote control | Remote control | This device only, Home network, Off |
 | | Tell Zaparoo what's on | On, Off |
 | Updates | Check for updates | On, Off |
