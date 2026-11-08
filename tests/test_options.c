@@ -60,7 +60,7 @@ int main(void)
   options_parse(&o, map_get, off);
   CHECK(o.remote == 0);
   options_defaults(&o);
-  CHECK(o.favourites == 0);                           /* off until the user turns it on */
+  CHECK(o.favourites == 1);                           /* on unless the user turns it off */
 
   for (int i = 0; i < options_count(); i++) {         /* keys unique and namespaced */
     CHECK(!strncmp(options_key(i), "retrotv_", 8));

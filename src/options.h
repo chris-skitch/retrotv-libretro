@@ -25,7 +25,7 @@ typedef struct {
   int zaparoo;             /* tell Zaparoo Core on this device what's on */
   int update_check;        /* look for a newer RetroTV once a day */
   int dual;                /* two screens: 1280x480 for ReplayOS "Dual horizontal" (applied at start) */
-  int favourites;          /* stars, Y/X in the list and the guide, favourites-only view (off by default) */
+  int favourites;          /* stars, Y/X in the list and the guide, favourites-only view (on by default) */
 } rtv_options;
 
 /* Defaults, as declared in the table. */
