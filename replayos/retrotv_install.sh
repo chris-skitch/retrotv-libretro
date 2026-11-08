@@ -18,6 +18,8 @@
 #   /opt/replay/cores/retrotv_libretro.cfg   the manifest that makes it a system (read at start-up)
 #   <storage>/roms/retrotv/RetroTV.txt       a line-up using retrotv/playlist.txt (when the
 #                                            folder has no line-ups yet)
+#   <storage>/retrotv/playlist.txt           how to add your channels, and free Pluto TV
+#                                            lists to try, all commented out (when missing)
 #   /media/sd/retrotv/retrotv_launch.sh      remote start (load_game), for scripts and Zaparoo
 #   /media/sd/zaparoo/launchers/retrotv.toml with Zaparoo: RetroTV, channel cards, history
 # Older RetroTV versions borrowed ReplayOS's A/V test, Virtual Boy or PiBench slot (before
@@ -75,6 +77,43 @@ fi
 SRC=$STORAGE/retrotv/retrotv_libretro.so
 say "core: $SRC"
 mkdir -p "$STORAGE/retrotv/backup"
+
+# A first playlist.txt: how to add channels, and free Pluto TV lists to try (all
+# commented out, so RetroTV shows its setup screen until one is chosen). Never replaced.
+PLAYLIST=$STORAGE/retrotv/playlist.txt
+if [[ ! -e $PLAYLIST ]]; then
+  PLUTO=https://raw.githubusercontent.com/BuddyChewChew/pluto/refs/heads/main
+  {
+    cat <<'TXT'
+# RetroTV: your channels
+#
+# Put the link to your channel list (M3U) on the first line that doesn't start
+# with #, or the full path to an .m3u file on the Pi. Then reopen RetroTV.
+#
+#   Dispatcharr:  http://<server-ip>:9191/output/m3u/<channel-profile>
+#   Tunarr:       http://<server-ip>:8088/api/channels.m3u
+#
+# The TV guide comes with the playlist. To use a different one, add a line:
+#   epg=http://<server>/guide.xml.gz
+#
+# ---------------------------------------------------------------------------
+# No channels of your own yet? Try free Pluto TV channels.
+#
+# Remove the # in front of ONE link below, save, and reopen RetroTV.
+# These are unofficial community lists (github.com/BuddyChewChew/pluto), with
+# a TV guide; channels come and go. Watch one Pluto channel at a time: two
+# Pluto streams at once cut each other off.
+# More: https://github.com/chris-skitch/retrotv-libretro/blob/main/docs/PLUTO_TV.md
+# ---------------------------------------------------------------------------
+#
+TXT
+    for r in "ar Argentina" "br Brazil" "ca Canada" "cl Chile" "dk Denmark" "fr France" "de Germany" \
+             "it Italy" "mx Mexico" "no Norway" "es Spain" "se Sweden" "gb United Kingdom" "us United States"; do
+      printf '# %s\n#%s/pluto_%s.m3u\n' "${r#* }" "$PLUTO" "${r%% *}"
+    done
+  } >"$PLAYLIST"
+  say "added $PLAYLIST (put your channel list link in it, or pick a free Pluto TV region)"
+fi
 
 # what ReplayOS reads at start-up: if neither changes, no restart is needed
 startup_files() { { cat "$CFG"; cat "$MANIFEST" 2>/dev/null || true; } | md5sum; }

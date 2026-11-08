@@ -69,7 +69,8 @@ Either way, the installer:
 - downloads the latest release and checks its SHA-256 sums;
 - installs the core and registers it as a ReplayOS system
   (`/opt/replay/cores/retrotv_libretro.cfg`), with `roms/retrotv/RetroTV.txt` as its first line-up;
-- copies the core to `<storage>/retrotv/` and creates a commented `playlist.txt` there if you don't have one;
+- copies the core to `<storage>/retrotv/` and, if you don't have one, creates a `playlist.txt` there
+  that explains what to put in it and lists free Pluto TV regions to try, all commented out;
 - adds **retrotv_update.sh** and **retrotv_uninstall.sh** to Extras;
 - restarts ReplayOS.
 
@@ -79,7 +80,8 @@ too) and last channel come along.
 
 Then:
 
-1. Open `retrotv/playlist.txt` on your storage and put your playlist link on its own line (see below).
+1. Open `retrotv/playlist.txt` on your storage and put your playlist link on its own line (see below),
+   or remove the `#` in front of one of the Pluto TV regions listed in it.
 2. On the TV, open **RetroTV** in the system list (an orange folder, like every external
    system), then **RetroTV** inside it.
 
