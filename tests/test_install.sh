@@ -52,10 +52,20 @@ check '[[ $(grep -v "^#" "$CORES/retrotv_libretro.cfg") == $(printf "id = \"retr
 check '[[ $(stat -c %a "$CORES/retrotv_libretro.cfg") == 644 && ! -L $CORES/retrotv_libretro.cfg ]]'
 check '! grep -q retrotv_libretro "$CORES/cores.cfg" && [[ $(slot_core avtest) == avtest_libretro.so ]]'
 check '[[ -f $ST/roms/retrotv/RetroTV.txt && $(grep -vc "^#" "$ST/roms/retrotv/RetroTV.txt") -eq 0 ]]'
+check '[[ -f $ST/retrotv/playlist.txt && $(grep -vc "^#" "$ST/retrotv/playlist.txt") -eq 0 ]]'   # all commented
+check '[[ $(grep -c "^#https://raw.githubusercontent.com/BuddyChewChew/pluto/refs/heads/main/pluto_[a-z][a-z].m3u$" "$ST/retrotv/playlist.txt") -eq 14 ]]'
+check 'grep -q "^# United Kingdom$" "$ST/retrotv/playlist.txt" && grep -A1 "^# Spain$" "$ST/retrotv/playlist.txt" | grep -q "pluto_es.m3u$"'
+cp "$ST/retrotv/playlist.txt" "$T/pl1"
 check '[[ -x $SDC/retrotv/retrotv_launch.sh && ! -f $ST/retrotv/slot.txt ]]'
 check 'grep -q "RetroTV in the system list" "$T/out" && grep -q "systemd-run.*restart replay.service" "$T/log"'
 run 2.1.0 retrotv_install.sh
 check '[[ $? -eq 0 && $(ls "$ST/roms/retrotv" | wc -l) -eq 1 ]]'      # re-run: nothing doubled
+check 'cmp -s "$ST/retrotv/playlist.txt" "$T/pl1"'                     # re-run: playlist.txt as it was
+case="an existing playlist.txt is never replaced"
+fresh
+printf 'http://my-server:9191/output/m3u/tv\n' >"$ST/retrotv/playlist.txt"
+run 2.1.0 retrotv_install.sh
+check '[[ $? -eq 0 && $(cat "$ST/retrotv/playlist.txt") == "http://my-server:9191/output/m3u/tv" ]]'
 fresh
 run 2.1.3 retrotv_install.sh
 check '[[ -f $CORES/retrotv_libretro.cfg ]]'                              # later releases too

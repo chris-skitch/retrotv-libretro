@@ -84,7 +84,7 @@ features are configured in Dispatcharr and selected through the playlist URL:
 | `src/ffapi.c/.h` | FFmpeg functions resolved with `dlopen` by soname. To use a new FFmpeg function, add it to `RETROTV_FF_FUNCS` and call it as `p_<name>` |
 | `src/m3u.c/.h` | IPTV M3U parser (`#EXTINF` tvg-* attributes, `x-tvg-url`, relative paths) |
 | `src/plconf.c` | playlist.txt: the playlist line and `epg=` |
-| `src/remote.c/.h` | remote control: tiny HTTP server thread on port 7474 (`/tune?ch=`, `/up`, `/down`, `/last`, `/pause` `/play` `/live`, `/focus`, `/swap`, `/update`, `/status`, `/channels` with logos and XMLTV `<icon>` posters, `/settings`, `/set?sleep=&audio=&leveller=&picture=&output=&screen2=`, `screen=` for two screens); requests are queued and applied in `retro_run`, settings through the X menu's own setters (a snapshot is published for the server thread under `remote_mu`). `RETROTV_REMOTE_PORT` overrides the port (tests beside an installed RetroTV) |
+| `src/remote.c/.h` | remote control: tiny HTTP server thread on port 7474 (`/tune?ch=`, `/up`, `/down`, `/last`, `/pause` `/play` `/live`, `/focus`, `/swap`, `/update`, `/fav?ch=&on=`, `/status`, `/channels` with logos, favourites and XMLTV `<icon>` posters, `/settings`, `/set?sleep=&audio=&leveller=&picture=&output=&screen2=`, `screen=` for two screens); requests are queued and applied in `retro_run`, settings through the X menu's own setters (a snapshot is published for the server thread under `remote_mu`). `RETROTV_REMOTE_PORT` overrides the port (tests beside an installed RetroTV; on the Pi use 7476: ReplayOS's own `replay` process listens on 7475) |
 | `src/update.c/.h` | RetroTV's own updates: release tag from GitHub's API, version compare, SHA256SUMS lookup (host tests). The thread in `retrotv.c` checks ~90 s after start and daily (option `retrotv_update_check`), and on X > Update or `/update?install=1` downloads the release to `/tmp/retrotv-update/<tag>` and runs its `install.sh` (`RETROTV_BASE=file://…`, `--no-restart`; exit 3 = restart needed) via `systemd-run`. Releases ship `install.sh` (only those can be installed this way). Tests: `RETROTV_UPDATE_CURRENT` pretends a version, `RETROTV_UPDATE_NOINSTALL` stops after the download |
 | `src/zapnow.c/.h` | tells Zaparoo Core on the Pi what's on (`media.active.update`, system Video, POST 127.0.0.1:7497/api; loopback needs no pairing): a sender thread with the newest report only, 1 s timeouts; Zaparoo's own tracker doesn't know external cores. Option `retrotv_zaparoo` (default on); `RETROTV_ZAPAROO_PORT` for tests |
 | `src/webui.html` → `src/webui.c` | the phone remote page served at `/`; edit the HTML, then `make src/webui.c` (`make check` fails if they differ). Self-contained: no external fonts or scripts |
@@ -92,9 +92,10 @@ features are configured in Dispatcharr and selected through the playlist URL:
 | `src/gunzip.c` | `.xml.gz` guides via the system zlib (`dlopen`) |
 | `src/guide.c` | TV guide screen |
 | `src/options.c` | core options table (v2 with v0 fallback) → `rtv_options` |
-| `src/osd.c/.h`, `src/theme.c` | software overlay on XRGB8888 (8x8 public-domain font; `vshift` for 240p), tuning static and the paused-VHS effect (`osd_vhs_pause`, applied in place to the held frame every frame), colour themes |
+| `src/lang.c/.h` | English/Spanish: code strings are English in `T("...")` (Latin-1 for the TV) or `TU()` (plain ASCII for the core option texts: ReplayOS's menu font cuts text at the first non-ASCII character, "ESPA" for ESPAÑOL), `N_()` marks strings translated later by content (onboard.c). The table is keyed by the English; `scripts/check-lang.py` (in `make check`) fails on a missing or stale entry or mismatched printf conversions, and checks the phone page's `ES` dictionary. The language is the `retrotv_language` option; `saves/retrotv/retrotv-language.txt` lets the next start declare System Settings' texts in it (options are registered before the frontend says the value) |
+| `src/osd.c/.h`, `src/theme.c` | software overlay on XRGB8888 (8x8 public-domain fonts: ASCII + Latin-1, accented capitals drawn as the capital with the accent above the cell; text is Latin-1 bytes, see `epg_latin1`; `vshift` for 240p), tuning static and the paused-VHS effect (`osd_vhs_pause`, applied in place to the held frame every frame), colour themes |
 | `src/vsmooth.c` | video timestamp smoothing (jittery sources broke the 2-3 cadence of 24 fps on 60 Hz) and frame-rate checks: a declared rate outside 5-120 fps (e.g. a 90 kHz "tbr") is ignored and the rate is measured from frame gaps |
-| `src/aspect.c`, `src/loud.c`, `src/lastch.c`, `src/onboard.c`, `src/testcard.c` | bar detection and zoom crop, volume leveller (AGC), last channel and per-channel zoom, setup-screen hints, test card |
+| `src/aspect.c`, `src/loud.c`, `src/lastch.c`, `src/onboard.c`, `src/testcard.c` | bar detection and zoom crop, volume leveller (AGC), last channel, per-channel zoom and favourites (`chanpref`; `pub_fav` mirrors the stars for the remote server; the favourites view `list_favs` is shared by the list, the guide's `rows` map and `chan_step`), setup-screen hints, test card |
 | `tests/harness.c` | headless libretro frontend: real-time pacing, scripted buttons, PNG screenshots, `HARNESS_OPTS`, save dir |
 | `tests/demo/` | demo line-up for screenshots: made-up channels, generated video and guide |
 
@@ -151,7 +152,11 @@ system list entry, load_game, sound, System Settings, two screens, last channel)
   accepted and ignored. `retrotv_uninstall.sh` removes the core, manifest and launchers.
   Storage backups use plain `cp` (the NFS share squashes root, so `cp -p` fails).
   `tests/test_install.sh` runs both against a fake ReplayOS in a user namespace (`unshare -r`).
-- **Releases:** `.github/workflows/release.yml` on a `v*` tag; bump `RETROTV_VERSION` first. Releases
+- **Releases:** `.github/workflows/release.yml` on a `v*` tag; bump `RETROTV_VERSION` first. A tag
+  with a `-` (`v0.4.0-beta.1`) is published as a GitHub pre-release: never "latest", so neither the
+  installer nor the in-core update check offers it; testers use `install.sh --version <tag>`. Betas
+  are tagged on the `dev` branch (features merged there for testing, then into `main` for the
+  release); `update_cmp` orders 0.4.0-beta.1 < 0.4.0-beta.2 < 0.4.0. Releases
   ship `install.sh` (RetroTV's in-core updater needs it). Test the installer against a local copy
   of a release with `RETROTV_BASE=file:///dir`.
 - **ReplayOS facts:** `replay.cfg` lives in memory and is written on shutdown: never edit it while

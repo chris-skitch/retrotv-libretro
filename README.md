@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/github/license/chris-skitch/retrotv-libretro)](LICENSE)
 [![Raspberry Pi 5 · ReplayOS](https://img.shields.io/badge/Raspberry%20Pi%205-ReplayOS-c51a4a?logo=raspberrypi&logoColor=white)](https://www.replayos.com)
 
+🇪🇸 **[Léeme en español](docs/LEEME.md)**: RetroTV también habla español.
+
 **Flip through live TV like it's 1993.** RetroTV is a libretro core that turns an
 IPTV playlist into a 90s cable box for **ReplayOS on the Raspberry Pi 5**: channel
 up and down, a channel banner with what's on now and next, a scrolling TV guide,
@@ -41,6 +43,7 @@ real 240p mode, and it uses ReplayOS's own FFmpeg, so there's nothing else to in
 - **Sleep timer**, audio track choice, **colour themes** and a VHS tuning look
 - **Remote control** over HTTP: tune a channel from Zaparoo, a script or a phone
 - **Built-in test card** and a setup screen that explains what's wrong in plain words
+- **English or Spanish** on the TV (System Settings → Language / Idioma); the phone remote follows the phone's language
 - Works with **Dispatcharr**, **Tunarr**, free **[Pluto TV](docs/PLUTO_TV.md)** channels or any M3U playlist with MPEG-TS or HLS streams
 
 ## Install
@@ -66,7 +69,8 @@ Either way, the installer:
 - downloads the latest release and checks its SHA-256 sums;
 - installs the core and registers it as a ReplayOS system
   (`/opt/replay/cores/retrotv_libretro.cfg`), with `roms/retrotv/RetroTV.txt` as its first line-up;
-- copies the core to `<storage>/retrotv/` and creates a commented `playlist.txt` there if you don't have one;
+- copies the core to `<storage>/retrotv/` and, if you don't have one, creates a `playlist.txt` there
+  that explains what to put in it and lists free Pluto TV regions to try, all commented out;
 - adds **retrotv_update.sh** and **retrotv_uninstall.sh** to Extras;
 - restarts ReplayOS.
 
@@ -76,7 +80,8 @@ too) and last channel come along.
 
 Then:
 
-1. Open `retrotv/playlist.txt` on your storage and put your playlist link on its own line (see below).
+1. Open `retrotv/playlist.txt` on your storage and put your playlist link on its own line (see below),
+   or remove the `#` in front of one of the Pluto TV regions listed in it.
 2. On the TV, open **RetroTV** in the system list (an orange folder, like every external
    system), then **RetroTV** inside it.
 
@@ -89,6 +94,17 @@ always your choice. It runs the release's own installer, which checks the SHA-25
 
 You can also update with **Extra → retrotv_update.sh**. **Uninstall** with
 **Extra → retrotv_uninstall.sh**. ReplayOS updates keep RetroTV installed.
+
+**Try a beta.** New features are tested as pre-releases (`v0.4.0-beta.1` and so on, listed on the
+[releases page](https://github.com/chris-skitch/retrotv-libretro/releases)) before everyone gets
+them. To install one, add its version to the one-liner:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/chris-skitch/retrotv-libretro/main/install.sh | bash -s -- --version v0.4.0-beta.1
+```
+
+Run the plain one-liner (or **Extra → retrotv_update.sh**) to go back to the latest release. The
+update check never offers a beta, and offers the release once it's out.
 
 ## Your channels: `playlist.txt`
 
@@ -134,14 +150,14 @@ Button names are the labels on an Xbox-style pad.
 
 | Button | Action |
 |---|---|
-| Up / Down (or R / L) | Channel up / down |
+| Up / Down (or R / L) | Channel up / down (favourites only while the favourites view is on, see Select) |
 | A | What's on (banner) |
 | B | Last channel |
 | Y | Zoom: letterboxed (Fit) or fill the screen (Zoom), remembered per channel |
-| X | Menu: pause / back to live, sleep timer, audio track, volume leveller, Fit/Zoom, 480/240p, update, test card, controls (with two screens: Screen 2 on/off and Swap screens instead of 480/240p) |
-| Start | TV guide: Up/Down channel, Left/Right 30 minutes, A to watch, B to close |
-| Select | Channel list: Up/Down one channel, Left/Right a page, A to watch, B to close |
-| R2 / L2 | Pause (a VCR-style still frame, or a clean still: *Paused picture* option) and play on (the channel keeps arriving in memory: up to about 15 minutes at 8–10 Mbit/s, less with both screens paused; it plays on by itself when full) / back to live. Also in the X menu |
+| X | Menu: sleep timer, audio track, volume leveller, Fit/Zoom, 480/240p, update, test card, controls (with two screens: Screen 2 on/off and Swap screens instead of 480/240p) |
+| Start | TV guide: Up/Down channel, Left/Right 30 minutes, A to watch, B to close; with Favourites on, Y and X as in the channel list |
+| Select | Channel list: Up/Down one channel, L2/R2 a page, A to watch, B to close. With **Favourites** on (System Settings, on by default): Y stars a channel, X shows the favourites only (or every channel again). The favourites view is shared by the list, the guide and channel up/down, and remembered for each line-up |
+| R2 / L2 | Pause (a VCR-style still frame, or a clean still: *Paused picture* option) and play on (the channel keeps arriving in memory: up to about 15 minutes at 8–10 Mbit/s, less with both screens paused; it plays on by itself when full) / back to live. In the channel list: a page up / down |
 | Left / Right | With [two screens](#two-screens): move the focus (and the sound) to screen 1 / screen 2 |
 
 <p align="center">
@@ -164,6 +180,7 @@ watch: they apply immediately and last until you quit.
 
 | Group | Setting | Choices |
 |---|---|---|
+| Language / Idioma | Language / Idioma | English, Espanol (the screens change at once; this menu's names when RetroTV next starts, without accents: ReplayOS's menu font has none) |
 | Picture | Overscan margin | None, 5 %, 10 % (shrinks the video so its edges stay visible) |
 | | Picture | Fit, Zoom (default for channels you haven't zoomed) |
 | | Remember zoom per channel | On, Off |
@@ -179,6 +196,7 @@ watch: they apply immediately and last until you quit.
 | | Colour theme | Cable Navy, Teletext, Green Phosphor |
 | | Tuning picture | Classic snow, VHS |
 | | Paused picture | VHS tape (a VCR's shaky still frame with a noise bar), Still picture |
+| | Favourites | On, Off (stars and a favourites-only view in the channel list and guide, see Controls) |
 | Remote control | Remote control | This device only, Home network, Off |
 | | Tell Zaparoo what's on | On, Off |
 | Updates | Check for updates | On, Off |
@@ -252,7 +270,8 @@ open `http://<your-pi>:7474/` in the browser (add it to your home screen for one
 tap). You get the channel on now; CH up/down, LAST, PAUSE/PLAY and LIVE buttons; with
 two screens, SCREEN 1 / SCREEN 2 and SWAP; and every channel with what's on now and
 next, with the programme's picture from the guide (or the channel logo). Tap a channel
-to watch it, or search by channel or programme. The ⚙ button opens the quick settings:
+to watch it, or search by channel or programme. With Favourites on, tap ☆ to make a channel a favourite
+(the same stars as on the TV) and ★ next to the search box to show the favourites only. The ⚙ button opens the quick settings:
 sleep timer, audio track, volume leveller, Fit/Zoom and 480/240p, the same as the X menu
 on the TV (with two screens, for either screen). When a newer RetroTV is out, an INSTALL
 button appears.
@@ -269,7 +288,8 @@ button appears.
 | `/up`, `/down`, `/last` | channel up, down, previous |
 | `/pause`, `/play`, `/live` | pause the channel (it keeps arriving in memory, up to about 15 minutes), play on from there, or go back to live. `/status` shows `paused` and `behind` (seconds) |
 | `/status` | what's on, as JSON: channel, name, state, programme now and next |
-| `/channels` | every channel (number, name, group, logo) with Now/Next, their times and poster images, as JSON |
+| `/channels` | every channel (number, name, group, logo, favourite) with Now/Next, their times and poster images, as JSON |
+| `/fav?ch=36&on=1` | star channel 36 as a favourite; `on=0` unstars it (409 while Favourites is off) |
 | `/settings` | sleep timer, audio track, volume leveller, picture and output, as JSON |
 | `/set?sleep=30&leveller=loud` | change settings: `sleep` (0, 15, 30, 60, 90), `audio` (track 1, 2, ...), `leveller` (off, normal, loud), `picture` (fit, zoom), `output` (480, 240) |
 | `/help` | this list, as text |

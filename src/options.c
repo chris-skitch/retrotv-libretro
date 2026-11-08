@@ -1,4 +1,5 @@
 #include "options.h"
+#include "lang.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +15,7 @@ typedef struct {
 } opt_def;
 
 static const struct { const char *key, *desc, *info; } CATS[] = {
+  { "language", "Language / Idioma", "English or Spanish. / Ingles o espanol." },   /* both languages: findable either way */
   { "picture", "Picture", "Video size, zoom and refresh rate." },
   { "sound", "Sound", "Volume leveller and tuning sounds." },
   { "interface", "Interface", "Banner, clock and on-screen hints." },
@@ -22,6 +24,10 @@ static const struct { const char *key, *desc, *info; } CATS[] = {
 };
 
 static const opt_def OPTS[] = {
+  /* first and in both languages, so it's easy to find whichever is on */
+  { "retrotv_language", "Language / Idioma",
+    "RetroTV's screens and menus. The names in this menu follow when RetroTV next starts. / Pantallas y menus de RetroTV. Los nombres de este menu cambian al volver a abrir RetroTV.",
+    "language", "en", { { "en", "English" }, { "es", "Espanol" } } },   /* ASCII: ReplayOS's menu font has no accents */
   { "retrotv_overscan", "Overscan margin",
     "Shrink the video so its edges stay visible on screens that cut them off. Menus are always inside the safe area.",
     "picture", "0", { { "0", "None" }, { "5", "5%" }, { "10", "10%" } } },
@@ -52,6 +58,9 @@ static const opt_def OPTS[] = {
   { "retrotv_theme", "Colour theme",
     "Colours of the banner, channel list and guide.",
     "interface", "navy", { { "navy", "Cable Navy" }, { "teletext", "Teletext" }, { "phosphor", "Green Phosphor" } } },
+  { "retrotv_favourites", "Favourites",
+    "Star channels with Y in the channel list and the guide; X then shows only them, and channel up/down goes through them. Stars on the phone remote too. Off: every channel, no stars.",
+    "interface", "on", { { "on", "On" }, { "off", "Off" } } },
   { "retrotv_static_style", "Tuning picture",
     "What you see while a channel tunes.",
     "interface", "classic", { { "classic", "Classic snow" }, { "vhs", "VHS" } } },
@@ -127,6 +136,8 @@ void options_parse(rtv_options *o, const char *(*get)(const char *key, void *ctx
   o->remote = !strcmp(rc, "off") ? 0 : !strcmp(rc, "lan") ? 2 : 1;
   o->zaparoo = !strcmp(val("retrotv_zaparoo", get, ctx), "on");
   o->update_check = !strcmp(val("retrotv_update_check", get, ctx), "on");
+  o->lang = lang_parse(val("retrotv_language", get, ctx));
+  o->favourites = !strcmp(val("retrotv_favourites", get, ctx), "on");
 }
 
 void options_defaults(rtv_options *o) { options_parse(o, NULL, NULL); }
@@ -138,17 +149,17 @@ int options_register(retro_environment_t env)
   if (version >= 2) {
     static struct retro_core_option_v2_category cats[NCATS + 1];
     static struct retro_core_option_v2_definition defs[NOPTS + 1];
-    for (int i = 0; i < NCATS; i++) cats[i] = (struct retro_core_option_v2_category){ CATS[i].key, CATS[i].desc, CATS[i].info };
+    for (int i = 0; i < NCATS; i++) cats[i] = (struct retro_core_option_v2_category){ CATS[i].key, TU(CATS[i].desc), TU(CATS[i].info) };
     for (int i = 0; i < NOPTS; i++) {
       memset(&defs[i], 0, sizeof(defs[i]));
       defs[i].key = OPTS[i].key;
-      defs[i].desc = OPTS[i].desc;
-      defs[i].info = OPTS[i].info;
+      defs[i].desc = TU(OPTS[i].desc);                /* in the language RetroTV last saw (lang_set first) */
+      defs[i].info = TU(OPTS[i].info);
       defs[i].category_key = OPTS[i].category;
       defs[i].default_value = OPTS[i].def;
       for (int k = 0; k < MAXV && OPTS[i].v[k].value; k++) {
         defs[i].values[k].value = OPTS[i].v[k].value;
-        defs[i].values[k].label = OPTS[i].v[k].label;
+        defs[i].values[k].label = TU(OPTS[i].v[k].label);
       }
     }
     static struct retro_core_options_v2 opts = { cats, defs };
@@ -158,7 +169,7 @@ int options_register(retro_environment_t env)
   static char text[NOPTS][512];
   static struct retro_variable vars[NOPTS + 1];
   for (int i = 0; i < NOPTS; i++) {
-    int n = snprintf(text[i], sizeof(text[i]), "%s; %s", OPTS[i].desc, OPTS[i].def);
+    int n = snprintf(text[i], sizeof(text[i]), "%s; %s", TU(OPTS[i].desc), OPTS[i].def);
     for (int k = 0; k < MAXV && OPTS[i].v[k].value && n < (int)sizeof(text[i]); k++)
       if (strcmp(OPTS[i].v[k].value, OPTS[i].def))
         n += snprintf(text[i] + n, sizeof(text[i]) - (size_t)n, "|%s", OPTS[i].v[k].value);

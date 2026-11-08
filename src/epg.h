@@ -56,9 +56,13 @@ void epg_now_next(const epg_chan *c, time_t t, const epg_prog **now, const epg_p
 /* "20261013190635 +0000" -> UTC seconds; -1 if malformed. */
 time_t epg_time(const char *s);
 
-/* UTF-8 text to printable ASCII for the 8x8 font: common punctuation
- * (curly quotes, dashes, middle dot, ellipsis) mapped, other non-ASCII dropped. */
+/* UTF-8 text to printable ASCII: common punctuation (curly quotes, dashes,
+ * middle dot, ellipsis) mapped, Latin-1 letters without their accents, other
+ * non-ASCII dropped. For matching names. */
 void epg_ascii(const char *in, char *out, size_t n);
+/* The same, but Latin-1 letters and signs (U+00A1..U+00FF: accents, n tilde,
+ * inverted ? and !) kept as single Latin-1 bytes: text to draw (osd_text). */
+void epg_latin1(const char *in, char *out, size_t n);
 
 /* Shorten a title in place to max characters: drop a trailing " - S01E02"
  * first, then cut and remove a dangling separator (never ends in " -"). */

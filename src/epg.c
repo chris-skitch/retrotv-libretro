@@ -109,7 +109,7 @@ static char *xml_text(const char *s, const char *e, size_t max)
   return out;
 }
 
-void epg_ascii(const char *in, char *out, size_t n)
+static void to8bit(const char *in, char *out, size_t n, int latin1)
 {
   /* Latin-1 letters U+00C0..U+00FF without their accents */
   static const char lat[] = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYPsaaaaaaaceeeeiiiidnooooo/ouuuuypy";
@@ -132,12 +132,16 @@ void epg_ascii(const char *in, char *out, size_t n)
     else if (cp == 0x201C || cp == 0x201D || cp == 0x2033) one[0] = '"';
     else if (cp == 0x2013 || cp == 0x2014 || cp == 0x2212 || cp == 0xB7 || cp == 0x2022) one[0] = '-';
     else if (cp == 0x2026) rep = "...";
+    else if (latin1 && cp >= 0xA1 && cp <= 0xFF) one[0] = (char)cp;
     else if (cp >= 0xC0 && cp <= 0xFF) one[0] = lat[cp - 0xC0];
     if (!rep) rep = one;
     for (; *rep && o + 1 < n; rep++) out[o++] = *rep;
   }
   out[o] = '\0';
 }
+
+void epg_ascii(const char *in, char *out, size_t n) { to8bit(in, out, n, 0); }
+void epg_latin1(const char *in, char *out, size_t n) { to8bit(in, out, n, 1); }
 
 /* Shorten a title to max characters: drop a trailing " - S01E02" first, then
  * cut and remove any dangling separator so it never ends in " -". */

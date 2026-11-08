@@ -105,7 +105,7 @@ static int parse_set(const char *q, size_t qlen, remote_cmd *c)
 void remote_parse(const char *req, remote_cmd *c)
 {
   memset(c, 0, sizeof(*c));
-  c->sleep = c->audio = c->leveller = c->picture = c->output = c->screen2 = -1;
+  c->sleep = c->audio = c->leveller = c->picture = c->output = c->screen2 = c->fav = -1;
   const char *sp = strchr(req, ' ');
   if (!sp) { c->kind = RC_BAD; return; }
   size_t ml = (size_t)(sp - req);
@@ -138,6 +138,12 @@ void remote_parse(const char *req, remote_cmd *c)
   else if (IS("/pause")) c->kind = RC_PAUSE;
   else if (IS("/play")) c->kind = RC_PLAY;
   else if (IS("/live")) c->kind = RC_LIVE;
+  else if (IS("/fav")) {
+    char v[8];
+    int a = query_get(q, qlen, "ch", c->ch, sizeof(c->ch));
+    if (query_get(q, qlen, "on", v, sizeof(v)) && (!strcmp(v, "1") || !strcmp(v, "0"))) c->fav = v[0] == '1';
+    c->kind = a && *c->ch && c->fav >= 0 ? RC_FAV : RC_BAD;
+  }
   else if (IS("/tune")) {
     int a = query_get(q, qlen, "ch", c->ch, sizeof(c->ch));
     int b = query_get(q, qlen, "name", c->name, sizeof(c->name));

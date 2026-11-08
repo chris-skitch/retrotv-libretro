@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../src/options.h"
+#include "../src/lang.h"
 
 static int fails;
 #define CHECK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL %s:%d  %s\n", __FILE__, __LINE__, #cond); fails++; } } while (0)
@@ -59,6 +60,9 @@ int main(void)
   const char *off[] = { "retrotv_remote", "off", NULL };
   options_parse(&o, map_get, off);
   CHECK(o.remote == 0);
+  options_defaults(&o);
+  CHECK(o.lang == LANG_EN);
+  CHECK(o.favourites == 1);                           /* on unless the user turns it off */
 
   for (int i = 0; i < options_count(); i++) {         /* keys unique and namespaced */
     CHECK(!strncmp(options_key(i), "retrotv_", 8));

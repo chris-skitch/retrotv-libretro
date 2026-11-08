@@ -27,6 +27,8 @@ int osd_text(osd_surface *s, int x, int y, const char *text, int scale, uint32_t
 /* Same, with a 1px-per-scale drop shadow for readability over video. */
 int osd_text_shadow(osd_surface *s, int x, int y, const char *text, int scale, uint32_t rgb);
 int osd_text_width(const char *text, int scale);
+/* a small star (one character cell) for osd_text strings: favourites */
+#define OSD_STAR "\x01"
 /* TV static: random grey noise. seed is advanced. */
 void osd_static(osd_surface *s, uint32_t *seed);
 /* VHS-style static: colour speckle, a rolling bright tracking band and

@@ -20,6 +20,7 @@
 #include "epg.h"
 #include "guide.h"
 #include "gunzip.h"
+#include "lang.h"
 #include "lastch.h"
 #include "loud.h"
 #include "onboard.h"
@@ -35,7 +36,7 @@
 #include "update.h"
 #include "webui.h"
 
-#define RETROTV_VERSION "0.3.4"
+#define RETROTV_VERSION "0.4.0"
 /* Output refresh: 60 Hz, or 50 Hz while a 25/50 fps (PAL) channel plays so
  * every frame is held equally long. Audio frames per run follow the rate. */
 #define AFRAMES_MAX ((size_t)(PLAYER_RATE / 50))   /* 960 stereo frames per run at 50 Hz */
@@ -67,6 +68,14 @@ static int zoom;                   /* TV aspect button: 0 FIT, 1 ZOOM */
 static chanpref zprefs;            /* remembered Fit/Zoom per channel */
 static char zoom_path[1100];
 static int zoom_save;              /* zprefs changed: write when the saver is free */
+static chanpref fprefs;            /* favourite channels (Y in the channel list), saved like zprefs */
+static char fav_path[1100];
+static int fav_save;
+static atomic_uchar *pub_fav;      /* favourite flag per channel: set here, read by the remote server too */
+static size_t *lv;                 /* the channel list's rows: every channel, or the favourites */
+static int list_favs;              /* the channel list and the guide show favourites only (X) */
+static char favview_path[1100];    /* remembers list_favs per line-up */
+static int favview_save;
 static double stream_fps;          /* fps of the channel playing now (for the refresh option) */
 static uint64_t audio_sent, audio_taken;   /* frames offered to / accepted by the frontend */
 static int audio_logged;
@@ -74,6 +83,7 @@ static loud_state loud;            /* AGC on programme audio */
 static rtv_options opts;           /* core options (frontend menu) */
 static int options_version;        /* 2 = v2, 1 = v0 variables, 0 = frontend refused */
 static char store_dir[512];        /* <storage>/retrotv when playlist.txt was found there */
+static int lang_save;              /* the language changed: write retrotv-language.txt for the next start */
 static char last_path[1100];       /* where the last channel is remembered */
 static int saved_idx = -1;         /* channel index the file currently holds */
 static double played_at;           /* t_now() when the current channel started playing */
@@ -95,13 +105,13 @@ static char epg_override[1024];        /* epg= from playlist.txt, else the playl
 #define GUIDE_RETRY 60                 /* after a failed fetch */
 static char guide_msg[160];            /* written by the guide thread, logged by retro_run */
 static atomic_int guide_msg_ready;     /* (the frontend's log callback may not be thread-safe) */
-static char toast[16];             /* big green TV-style message, e.g. "ZOOM" */
+static char toast[32];             /* big green TV-style message, e.g. "ZOOM" (18 fit) */
 static double toast_until;
 static uint32_t noise_seed = 12345;
 static int list_open;
 static int guide_open;              /* TV guide screen (Start) */
 static int qm_open, qm_sel;          /* quick menu (X) */
-enum { QM_PAUSE, QM_LIVE, QM_SLEEP, QM_AUDIO, QM_LEVEL, QM_ZOOM, QM_OUTPUT, QM_SCREEN2, QM_SWAP, QM_UPDATE, QM_TESTCARD, QM_HELP, QM_CLOSE, QM_ROWS };
+enum { QM_SLEEP, QM_AUDIO, QM_LEVEL, QM_ZOOM, QM_OUTPUT, QM_SCREEN2, QM_SWAP, QM_UPDATE, QM_TESTCARD, QM_HELP, QM_CLOSE, QM_ROWS };
 static int qm_rows[QM_ROWS], qm_n;     /* the rows shown: Output in single mode, Screen 2 / Swap in dual mode */
 static int sleep_min;                /* sleep timer setting, minutes (0 = off) */
 static double sleep_at;              /* t_now() when the set switches off (0 = no timer) */
@@ -176,11 +186,12 @@ static char state_dir[1024];       /* where the core keeps its small files */
 /* Remote control: the server thread resolves a request and leaves it here;
  * retro_run applies it. It reads chans (fixed while it runs) and the two
  * published values below, never the UI state. */
-enum { RQ_TUNE = 1, RQ_UP, RQ_DOWN, RQ_LAST, RQ_FOCUS, RQ_PAUSE, RQ_LIVE, RQ_SWAP };   /* RQ_PAUSE: channel field 0 play, 1 pause */
+enum { RQ_TUNE = 1, RQ_UP, RQ_DOWN, RQ_LAST, RQ_FOCUS, RQ_PAUSE, RQ_LIVE, RQ_SWAP, RQ_FAV };   /* RQ_PAUSE: channel field 0 play, 1 pause; RQ_FAV: screen field 1 star, 0 unstar */
 #define RQ(kind, screen, idx) ((kind) | (screen) << 4 | (idx) << 6)
 static atomic_int remote_req;          /* RQ(kind, screen 0 focused/1/2, channel index); 0 = nothing */
 static atomic_int pub_cur = -1;        /* channel on the focused screen, for /status */
 static atomic_int pub_dual, pub_s2on, pub_focus;       /* two screens: mode, screen 2 on, focused screen (0/1) */
+static atomic_int pub_favs;           /* Favourites on in System Settings, for /channels and /fav */
 static atomic_int pub_cur2 = -1, pub_state2;           /* the other screen's channel and state */
 static atomic_int pub_paused, pub_behind, pub_paused2, pub_behind2;   /* pause: held?, seconds behind live */
 enum { PS_TUNING, PS_PLAYING, PS_NO_SIGNAL, PS_OFF, PS_TESTCARD, PS_NO_CHANNELS };
@@ -311,9 +322,9 @@ static void tune(size_t idx)
 
 static void clip_copy(char *dst, size_t n, const char *src, size_t maxchars)
 {
-  char *a = m3u_ascii(src);
-  snprintf(dst, n, "%.*s", (int)maxchars, a ? a : "");
-  free(a);
+  char a[256];
+  epg_latin1(src ? src : "", a, sizeof(a));        /* keeps accented letters (the font has them) */
+  snprintf(dst, n, "%.*s", (int)maxchars, a);
 }
 
 /* ---------- drawing ---------- */
@@ -350,13 +361,13 @@ static void draw_banner(osd_surface *s, player_state st)
   time_t tnow = time(NULL) - (time_t)sh.behind;     /* paused earlier: what's on at the moment you're watching */
   epg_now_next(guide_chan(guide, c), tnow, &pn, &px);
   if (pn) {
-    epg_ascii(pn->title, now_t, sizeof(now_t));
+    epg_latin1(pn->title, now_t, sizeof(now_t));
     hhmm(pn->start, t0, sizeof(t0));
     hhmm(pn->stop, t1, sizeof(t1));
     frac = (double)(tnow - pn->start) / (double)(pn->stop - pn->start);
   }
   if (px) {
-    epg_ascii(px->title, next_t, sizeof(next_t));
+    epg_latin1(px->title, next_t, sizeof(next_t));
     hhmm(px->start, t2, sizeof(t2));
   }
   pthread_mutex_unlock(&guide_mu);
@@ -382,14 +393,14 @@ static void draw_banner(osd_surface *s, player_state st)
   if (sh.behind >= 1) {
     char b[16], t[32];
     mmss(sh.behind, b, sizeof(b));
-    snprintf(t, sizeof(t), "-%s BEHIND LIVE", b);
+    snprintf(t, sizeof(t), T("-%s BEHIND LIVE"), b);
     osd_text(s, bx + bw - osd_text_width(t, 1) - 14, by + 42, t, 1, TH->accent);
   } else {                                           /* a newer RetroTV: where to get it */
     char t[48] = "";
     pthread_mutex_lock(&upd_mu);
-    if (upd_state == UP_AVAILABLE) snprintf(t, sizeof(t), "%s AVAILABLE: X MENU", upd_latest);
-    else if (upd_state == UP_INSTALLED) snprintf(t, sizeof(t), "UPDATED: REOPEN RETROTV");
-    else if (upd_state == UP_RESTART) snprintf(t, sizeof(t), "UPDATED: RESTART REPLAYOS");
+    if (upd_state == UP_AVAILABLE) snprintf(t, sizeof(t), T("%s AVAILABLE: X MENU"), upd_latest);
+    else if (upd_state == UP_INSTALLED) snprintf(t, sizeof(t), "%s", T("UPDATED: REOPEN RETROTV"));
+    else if (upd_state == UP_RESTART) snprintf(t, sizeof(t), "%s", T("UPDATED: RESTART REPLAYOS"));
     pthread_mutex_unlock(&upd_mu);
     if (*t) osd_text(s, bx + bw - osd_text_width(t, 1) - 14, by + 42, t, 1, TH->accent);
   }
@@ -408,14 +419,14 @@ static void draw_banner(osd_surface *s, player_state st)
     int dots = (int)(frame_no / 20) % 4;
     int att = player_attempt(pl, NULL, 0);
     char retry[24] = "";
-    if (att > 1) snprintf(retry, sizeof(retry), "  (retry %d)", att);
-    snprintf(line, sizeof(line), "TUNING%.*s%*s %.0fs%s", dots, "...", 3 - dots, "", player_tuning_seconds(pl), retry);
+    if (att > 1) snprintf(retry, sizeof(retry), T("  (retry %d)"), att);
+    snprintf(line, sizeof(line), "%s%.*s%*s %.0fs%s", T("TUNING"), dots, "...", 3 - dots, "", player_tuning_seconds(pl), retry);
     break;
   }
   case PLAYER_ERROR: {
     char e[64];
     clip_copy(e, sizeof(e), player_error(pl), 56);
-    snprintf(line, sizeof(line), "NO SIGNAL - %s", e);
+    snprintf(line, sizeof(line), T("NO SIGNAL - %s"), e);
     break;
   }
   case PLAYER_PLAYING: {
@@ -431,7 +442,7 @@ static void draw_banner(osd_surface *s, player_state st)
   if (has_guide) {
     int lx = nx + 48, chars = (right - lx) / 16;      /* titles at 2x: 16 px per character */
     if (pn) {
-      osd_text(s, nx, y + 4, "NOW", 1, TH->accent);
+      osd_text(s, nx, y + 4, T("NOW"), 1, TH->accent);
       epg_shorten(now_t, chars);
       osd_text_shadow(s, lx, y, now_t, 2, TH->text);
       int bx0 = lx + 48, bw0 = right - 48 - bx0;      /* "19:40 [=====-----] 20:10" */
@@ -441,7 +452,7 @@ static void draw_banner(osd_surface *s, player_state st)
       osd_text(s, right - 40, y + 22, t1, 1, TH->muted);
     }
     if (px) {
-      osd_text(s, nx, y + 42, "NEXT", 1, TH->accent);
+      osd_text(s, nx, y + 42, T("NEXT"), 1, TH->accent);
       char nl[64];
       epg_shorten(next_t, (right - lx) / 8 - 7);            /* "20:40  " in front */
       snprintf(nl, sizeof(nl), "%s  %s", t2, next_t);
@@ -454,35 +465,106 @@ static void draw_banner(osd_surface *s, player_state st)
   int maxc = (right - nx) / 8;                       /* keep inside the banner */
   if (maxc > 0 && (int)strlen(line) > maxc) line[maxc] = '\0';
   osd_text(s, nx, y, line, 1, st == PLAYER_ERROR ? OSD_RGB(255, 120, 120) : TH->muted);
-  if (opts.hints) osd_text(s, nx, y + 16, "A INFO  B LAST  Y ZOOM  X MENU  START GUIDE", 1, TH->muted);
+  if (opts.hints) osd_text(s, nx, y + 16, T("A INFO  B LAST  Y ZOOM  X MENU  START GUIDE"), 1, TH->muted);
 }
 
-#define LIST_ROWS 12                   /* channels per page of the list (Left/Right page) */
+#define LIST_ROWS 12                   /* channels per page of the list (L2/R2 page) */
+static int is_fav(size_t i) { return pub_fav && i < chans.count && atomic_load(&pub_fav[i]); }
+/* the favourites-only view is on (Favourites off in System Settings: never; the stars stay saved) */
+static int favs_view(void) { return opts.favourites && list_favs; }
+
+static void set_fav(size_t i, int on)
+{
+  if (!pub_fav || i >= chans.count) return;
+  if (!chanpref_set(&fprefs, &chans.ch[i], on)) fav_save = 1;
+  atomic_store(&pub_fav[i], (unsigned char)(on != 0));
+}
+
+/* the channel list's rows (every channel, or the favourites) into lv; how many */
+static size_t list_rows(void)
+{
+  size_t n = 0;
+  for (size_t i = 0; lv && i < chans.count; i++) if (!favs_view() || is_fav(i)) lv[n++] = i;
+  return n;
+}
+
+/* the row of channel ch: the first one at or after it when it isn't shown (unstarred, or X) */
+static size_t row_of(size_t n, size_t ch)
+{
+  for (size_t k = 0; k < n; k++) if (lv[k] >= ch) return k;
+  return 0;
+}
+static size_t list_pos(size_t n) { return row_of(n, list_cursor); }
+
+static void set_favview(int on)                      /* X in the list or the guide; remembered */
+{
+  list_favs = on;
+  favview_save = 1;
+}
+
+/* channel up (+1) or down (-1): through the favourites while that view is on (X in the list
+ * or the guide) and has any, else through every channel */
+static size_t chan_step(int dir)
+{
+  size_t n = chans.count, i = cur;
+  int favs = 0;
+  for (size_t k = 0; favs_view() && k < n && !favs; k++) favs = is_fav(k);
+  for (size_t k = 0; k < n; k++) {
+    i = dir > 0 ? (i + 1) % n : i ? i - 1 : n - 1;
+    if (!favs || is_fav(i)) return i;
+  }
+  return cur;
+}
+
+static size_t guide_ch;                              /* the guide's highlighted channel (playlist index) */
+/* the guide's rows are the channel list's: every channel or the favourites */
+static size_t guide_sync(void)
+{
+  size_t n = list_rows();
+  gv.rows = lv;
+  gv.nrows = lv ? n : chans.count;
+  gv.star = opts.favourites ? is_fav : NULL;           /* NULL: no stars, the plain hint line */
+  gv.favs = favs_view();
+  gv.sel = lv ? row_of(n, guide_ch) : guide_ch;
+  guide_scroll(&gv, gv.nrows);
+  return gv.nrows;
+}
+
 static void draw_list(osd_surface *s)
 {
   int rows = LIST_ROWS, x = 40, y = 40, w = PLAYER_W - 80, rh = 30;
+  size_t n = list_rows(), pos = list_pos(n);
   osd_fill(s, x, y, w, 36 + rows * rh, TH->bg, 230);
   osd_fill(s, x, y, w, 30, TH->accent, 255);
-  osd_text(s, x + 12, y + 8, "CHANNEL LIST", 2, TH->on_accent);
-  osd_text(s, x + w - 12 - osd_text_width("LEFT/RIGHT PAGE", 1), y + 12, "LEFT/RIGHT PAGE", 1, TH->on_accent);
-  size_t first = list_cursor >= (size_t)rows / 2 ? list_cursor - (size_t)rows / 2 : 0;
-  if (chans.count > (size_t)rows && first + (size_t)rows > chans.count) first = chans.count - (size_t)rows;
-  for (int r = 0; r < rows && first + (size_t)r < chans.count; r++) {
-    size_t i = first + (size_t)r;
+  osd_text(s, x + 12, y + 8, favs_view() ? T("FAVOURITES") : T("CHANNEL LIST"), 2, TH->on_accent);
+  const char *hint = !opts.favourites ? T("L2/R2 PAGE") : !list_favs ? T("Y STAR  X FAVOURITES  L2/R2 PAGE")
+                   : n ? T("Y UNSTAR  X ALL  L2/R2 PAGE") : T("X ALL CHANNELS");
+  osd_text(s, x + w - 12 - osd_text_width(hint, 1), y + 12, hint, 1, TH->on_accent);
+  if (!n) {
+    const char *t = T("NO FAVOURITES YET"), *h = T("PRESS X FOR ALL CHANNELS, THEN Y TO STAR ONE");
+    osd_text(s, x + (w - osd_text_width(t, 2)) / 2, y + 150, t, 2, TH->text);
+    osd_text(s, x + (w - osd_text_width(h, 1)) / 2, y + 180, h, 1, TH->muted);
+    return;
+  }
+  size_t first = pos >= (size_t)rows / 2 ? pos - (size_t)rows / 2 : 0;
+  if (n > (size_t)rows && first + (size_t)rows > n) first = n - (size_t)rows;
+  for (int r = 0; r < rows && first + (size_t)r < n; r++) {
+    size_t i = lv[first + (size_t)r];
     int ry = y + 36 + r * rh;
-    if (i == list_cursor) osd_fill(s, x + 4, ry - 4, w - 8, rh - 2, TH->cell_sel, 255);
+    if (first + (size_t)r == pos) osd_fill(s, x + 4, ry - 4, w - 8, rh - 2, TH->cell_sel, 255);
     char num[16], name[40];
     clip_copy(num, sizeof(num), chans.ch[i].number, 6);
-    clip_copy(name, sizeof(name), chans.ch[i].name, 30);
+    clip_copy(name, sizeof(name), chans.ch[i].name, 25);
     osd_text(s, x + 14, ry + 2, num, 2, i == cur ? TH->title : TH->sub);
     osd_text(s, x + 120, ry + 2, name, 2, TH->text);
+    if (opts.favourites && is_fav(i)) osd_text(s, x + w - 34, ry + 2, OSD_STAR, 2, TH->title);
   }
 }
 
 static void draw_no_signal(osd_surface *s)
 {
   osd_fill(s, 0, 0, PLAYER_W, PLAYER_H, OSD_RGB(16, 32, 160), 255);   /* classic blue screen */
-  const char *t = "NO SIGNAL";
+  const char *t = T("NO SIGNAL");
   osd_text_shadow(s, (PLAYER_W - osd_text_width(t, 4)) / 2, 150, t, 4, TH->text);
 }
 
@@ -511,17 +593,17 @@ static void draw_help(osd_surface *s)
   onboard_explain(ob_why, ob_err, problem, sizeof(problem), hint, sizeof(hint));
   osd_fill(s, 0, 0, PLAYER_W, PLAYER_H, TH->bg, 255);
   osd_fill(s, 32, 28, PLAYER_W - 64, 36, TH->accent, 255);
-  osd_text(s, 48, 38, "RETROTV - SET UP YOUR CHANNELS", 2, TH->on_accent);
-  osd_text_shadow(s, 48, 84, problem, 2, OSD_RGB(255, 140, 140));
-  int y = wrap1(s, 48, 108, hint, 68, TH->text) + 14;
-  osd_text(s, 48, y, "1. Put your playlist link on the first line of:", 1, TH->accent);
+  osd_text(s, 48, 38, T("RETROTV - SET UP YOUR CHANNELS"), 2, TH->on_accent);
+  osd_text_shadow(s, 48, 84, T(problem), 2, OSD_RGB(255, 140, 140));   /* onboard.c's English, by content */
+  int y = wrap1(s, 48, 108, T(hint), 68, TH->text) + 14;
+  osd_text(s, 48, y, T("1. Put your playlist link on the first line of:"), 1, TH->accent);
   y = wrap1(s, 72, y + 16, ob_path, 65, TH->sub) + 10;
-  osd_text(s, 48, y, "2. For example, from Dispatcharr:", 1, TH->accent);
+  osd_text(s, 48, y, T("2. For example, from Dispatcharr:"), 1, TH->accent);
   osd_text(s, 72, y + 16, "http://<server-ip>:9191/output/m3u/<profile>", 1, TH->sub);
-  osd_text(s, 48, y + 42, "3. Close and reopen RetroTV.", 1, TH->accent);
+  osd_text(s, 48, y + 42, T("3. Close and reopen RetroTV."), 1, TH->accent);
   osd_fill(s, 32, 400, PLAYER_W - 64, 2, TH->accent, 255);
-  osd_text(s, 48, 414, "A: TEST CARD - check picture, sound and stereo", 1, TH->text);
-  osd_text(s, 48, 430, "Settings: ReplayOS menu > System Settings", 1, TH->muted);
+  osd_text(s, 48, 414, T("A: TEST CARD - check picture, sound and stereo"), 1, TH->text);
+  osd_text(s, 48, 430, T("Settings: ReplayOS menu > System Settings"), 1, TH->muted);
 }
 
 /* First launch: the controls, once. */
@@ -530,21 +612,24 @@ static void draw_welcome(osd_surface *s)
   int x = 64, y = 60, w = PLAYER_W - 128, h = 340;
   osd_fill(s, x, y, w, h, TH->bg, 235);
   osd_fill(s, x, y, w, 3, TH->accent, 255);
-  osd_text_shadow(s, x + 24, y + 18, "WELCOME TO RETROTV", 2, TH->title);
+  osd_text_shadow(s, x + 24, y + 18, T("WELCOME TO RETROTV"), 2, TH->title);
   static const char *rows[][2] = {
-    { "UP / DOWN", "change channel" }, { "A", "what's on (banner)" }, { "B", "last channel" },
-    { "Y", "zoom / fit picture" }, { "X", "menu: sleep, audio, leveller, test card" }, { "START", "TV guide" },
-    { "SELECT", "channel list (left/right: a page)" },
-    { "R2 / L2", "pause, play / back to live" },
-    { "LEFT/RIGHT", "screen 1 / screen 2 (sound follows)" },
+    { N_("UP / DOWN"), N_("change channel") }, { "A", N_("what's on (banner)") }, { "B", N_("last channel") },
+    { "Y", N_("zoom / fit picture") }, { "X", N_("menu: sleep, audio, leveller, test card") }, { "START", N_("TV guide") },
+    { "SELECT", N_("channel list (L2/R2: a page)") },
+    { "R2 / L2", N_("pause, play / back to live") },
+    { N_("LEFT/RIGHT"), N_("screen 1 / screen 2 (sound follows)") },
   };
   int n = dual ? 9 : 8, more = dual ? 22 : 0;        /* the last row only with two screens */
   for (int i = 0; i < n; i++) {
-    osd_text_shadow(s, x + 24, y + 52 + i * 26, rows[i][0], 2, TH->accent);
-    osd_text(s, x + 200, y + 56 + i * 26, rows[i][1], 1, TH->text);
+    const char *what = rows[i][1];
+    if (opts.favourites && i == 5) what = N_("TV guide (Y: star, X: favourites)");
+    if (opts.favourites && i == 6) what = N_("channel list (Y: star, X: favourites)");
+    osd_text_shadow(s, x + 24, y + 52 + i * 26, T(rows[i][0]), 2, TH->accent);
+    osd_text(s, x + 200, y + 56 + i * 26, T(what), 1, TH->text);
   }
-  osd_text(s, x + 24, y + 270 + more, "Settings: ReplayOS menu > System Settings", 1, TH->sub);
-  osd_text_shadow(s, x + 24, y + 298 + more / 2 + 4, "Press A to start watching", 2, TH->text);
+  osd_text(s, x + 24, y + 270 + more, T("Settings: ReplayOS menu > System Settings"), 1, TH->sub);
+  osd_text_shadow(s, x + 24, y + 298 + more / 2 + 4, T("Press A to start watching"), 2, TH->text);
 }
 
 /* ---------- playlist lookup ---------- */
@@ -968,6 +1053,17 @@ static void last_init(const char *src)
   char *zt = slurp(zoom_path, 1u << 20);
   chanpref_parse(&zprefs, zt);
   free(zt);
+  snprintf(fav_path, sizeof(fav_path), "%s/retrotv-fav-%08x.txt", dir, (unsigned)lastch_hash(src));
+  char *ft = slurp(fav_path, 1u << 20);
+  chanpref_parse(&fprefs, ft);
+  free(ft);
+  pub_fav = calloc(chans.count, sizeof(*pub_fav));
+  lv = calloc(chans.count, sizeof(*lv));
+  for (size_t i = 0; pub_fav && i < chans.count; i++) atomic_store(&pub_fav[i], chanpref_get(&fprefs, &chans.ch[i]) == 1);
+  snprintf(favview_path, sizeof(favview_path), "%s/retrotv-favview-%08x.txt", dir, (unsigned)lastch_hash(src));
+  char *vt = slurp(favview_path, 64);
+  list_favs = vt && strstr(vt, "favourites=on") != NULL;
+  free(vt);
   snprintf(last_path, sizeof(last_path), "%s/retrotv-last-%08x.txt", dir, (unsigned)lastch_hash(src));
   logf_(RETRO_LOG_INFO, "last channel file: %s", last_path);
 }
@@ -1102,6 +1198,7 @@ static void apply_options(void)
   }
   if (saved_res240 >= 0 && opts.res240 == saved_res240) opts.res240 = r240;
   else saved_res240 = opts.res240;
+  if (opts.lang != lang_get()) { lang_set(opts.lang); lang_save = 1; }   /* the screens follow now */
   if (!pl) dual = opts.dual;                         /* dual mode is fixed for the session */
   if (!pl) res240 = opts.res240;                     /* in dual mode too: fixed for the session */                     /* at load the frontend asks for the size next */
   loud_target();
@@ -1136,12 +1233,12 @@ static void check_options(void)
   if (env_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &upd) && upd) {
     apply_options();
     if (dual && opts.res240 != res240 && !dual_changed_logged) {
-      show_toast("RESTART RETROTV");
+      show_toast(T("RESTART RETROTV"));
       logf_(RETRO_LOG_INFO, "output %s: applies when RetroTV restarts (two screens)", opts.res240 ? "240p" : "480");
       dual_changed_logged = 1;
     }
     if (opts.dual != dual && !dual_changed_logged) {
-      show_toast("RESTART RETROTV");
+      show_toast(T("RESTART RETROTV"));
       logf_(RETRO_LOG_INFO, "two screens %s: applies when RetroTV restarts", opts.dual ? "on" : "off");
       dual_changed_logged = 1;
     }
@@ -1170,12 +1267,12 @@ static void show_toast(const char *t)
 /* paused: like a VCR, top right, with how long it can stay paused */
 static void draw_paused(osd_surface *s, const player_shift *sh)
 {
-  const char *big = "II PAUSED";
+  const char *big = T("II PAUSED");
   int x = PLAYER_W - 48 - osd_text_width(big, 3);
   osd_text_shadow(s, x, 40, big, 3, OSD_RGB(80, 255, 80));
   char t[16], line[64];
   mmss(sh->paused_for, t, sizeof(t));
-  if (sh->room >= 0) snprintf(line, sizeof(line), "%s  -  up to %d min more", t, (int)(sh->room / 60));
+  if (sh->room >= 0) snprintf(line, sizeof(line), T("%s  -  up to %d min more"), t, (int)(sh->room / 60));
   else snprintf(line, sizeof(line), "%s", t);
   osd_text_shadow(s, PLAYER_W - 48 - osd_text_width(line, 1), 72, line, 1, OSD_RGB(80, 255, 80));
 }
@@ -1210,9 +1307,9 @@ static void set_sleep(int minutes)
   sleep_min = minutes;
   sleep_at = minutes ? t_now() + minutes * SLEEP_UNIT : 0;
   sleep_warned = 0;
-  char t[16];
-  if (minutes) snprintf(t, sizeof(t), "SLEEP %d", minutes);
-  else snprintf(t, sizeof(t), "SLEEP OFF");
+  char t[32];
+  if (minutes) snprintf(t, sizeof(t), T("SLEEP %d"), minutes);
+  else snprintf(t, sizeof(t), "%s", T("SLEEP OFF"));
   show_toast(t);
   logf_(RETRO_LOG_INFO, "sleep timer %d min", minutes);
 }
@@ -1235,7 +1332,7 @@ static void zoom_here(int z)
 static void set_zoom(int z)
 {
   zoom_here(z);
-  show_toast(zoom ? "ZOOM" : "FIT");
+  show_toast(zoom ? T("ZOOM") : T("FIT"));
 }
 
 static void step_audio(int dir)
@@ -1251,7 +1348,7 @@ static void step_audio(int dir)
   player_open_track(pl, chans.ch[cur].url, k);       /* re-tune with that track */
 }
 
-static const char *const LEVELLER_NAMES[3] = { "Off", "Normal", "Loud" };
+static const char *const LEVELLER_NAMES[3] = { N_("Off"), N_("Normal"), N_("Loud") };
 
 /* the volume leveller for now; System Settings holds the saved default */
 static void set_leveller(int v)
@@ -1259,9 +1356,7 @@ static void set_leveller(int v)
   opts.leveller = v;
   loud_target();
   if (v) loud_reset(&loud);                          /* re-settle from unity, quickly */
-  char t[24];
-  snprintf(t, sizeof(t), "LEVELLER %s", v == 2 ? "LOUD" : v ? "NORMAL" : "OFF");
-  show_toast(t);
+  show_toast(v == 2 ? T("LEVELLER LOUD") : v ? T("LEVELLER NORMAL") : T("LEVELLER OFF"));
   logf_(RETRO_LOG_INFO, "volume leveller %s (this session)", LEVELLER_NAMES[v]);
 }
 
@@ -1281,11 +1376,11 @@ static void set_pause(int on)
   if (on == sh.paused) return;
   if (on && player_get_state(pl) != PLAYER_PLAYING) return;
   player_pause(pl, on);
-  char b[16], t[24];
+  char b[16], t[32];
   mmss(sh.behind, b, sizeof(b));
   if (on) logf_(RETRO_LOG_INFO, "%spause ch %s", stag(), chans.ch[cur].number);
   else logf_(RETRO_LOG_INFO, "%splay ch %s, %s behind live", stag(), chans.ch[cur].number, b);
-  snprintf(t, sizeof(t), "PLAY -%s", b);
+  snprintf(t, sizeof(t), T("PLAY -%s"), b);
   if (!on && gside == focus_side) show_toast(t);
 }
 
@@ -1297,7 +1392,7 @@ static void go_live(void)
   if (!sh.paused && sh.behind < 1) return;
   logf_(RETRO_LOG_INFO, "%sback to live", stag());
   tune(cur);
-  if (gside == focus_side) show_toast("LIVE");
+  if (gside == focus_side) show_toast(T("LIVE"));
 }
 
 /* a paused picture looks like a VCR's still frame (the screen in the globals) */
@@ -1316,16 +1411,13 @@ static void shift_tick(void)
   if (!sh.paused || !sh.full) return;
   logf_(RETRO_LOG_WARN, "%spause memory full after %.0f s: playing", stag(), sh.paused_for);
   player_pause(pl, 0);
-  if (gside == focus_side) show_toast("BUFFER FULL");
+  if (gside == focus_side) show_toast(T("BUFFER FULL"));
 }
 
 static void qm_build(void)
 {
   qm_n = 0;
-  player_shift sh;
-  player_get_shift(pl, &sh);
   for (int r = 0; r < QM_ROWS; r++) {
-    if (r == QM_LIVE && !sh.paused && sh.behind < 1) continue;
     if (r == QM_OUTPUT && dual) continue;             /* two screens: System Settings, at start */
     if (r == QM_SCREEN2 && !dual) continue;
     if (r == QM_SWAP && !(dual && screen2_on)) continue;
@@ -1337,10 +1429,12 @@ static void qm_build(void)
 static void draw_qmenu(osd_surface *s)
 {
   qm_build();
-  int x = 40, y = 92, w = 330, rh = 34, h = 62 + qm_n * rh;     /* below the OSD message */
+  int x = 40, y = 92, w = 330, rh = 34;               /* below the OSD message */
+  if (62 + qm_n * rh > PLAYER_H - 8 - y) rh = (PLAYER_H - 8 - y - 62) / qm_n;   /* 10+ rows: tighter, all on screen */
+  int h = 62 + qm_n * rh;
   osd_fill(s, x, y, w, h, TH->bg, 235);
   osd_fill(s, x, y, w, 30, TH->accent, 255);
-  osd_text(s, x + 12, y + 8, "MENU", 2, TH->on_accent);
+  osd_text(s, x + 12, y + 8, T("MENU"), 2, TH->on_accent);
   player_info in;
   player_get_info(pl, &in);
   for (int i = 0; i < qm_n; i++) {
@@ -1348,55 +1442,43 @@ static void draw_qmenu(osd_surface *s)
     char val[32] = "";
     int ry = y + 38 + i * rh, dim = 0;
     const char *label = "";
-    player_shift sh;
-    player_get_shift(pl, &sh);
     switch (r) {
-    case QM_PAUSE: {
-      char b[16];
-      label = "Pause";
-      mmss(sh.paused ? sh.paused_for : sh.behind, b, sizeof(b));
-      if (sh.paused) snprintf(val, sizeof(val), "Paused %s", b);
-      else if (sh.behind >= 1) snprintf(val, sizeof(val), "Playing -%s", b);
-      else snprintf(val, sizeof(val), "Live");
-      break;
-    }
-    case QM_LIVE: label = "Back to live"; break;
     case QM_UPDATE: {
-      label = "Update";
+      label = T("Update");
       pthread_mutex_lock(&upd_mu);
       int st = upd_state;
       char lt[32];
       snprintf(lt, sizeof(lt), "%s", upd_latest);
       pthread_mutex_unlock(&upd_mu);
-      if (st == UP_CHECKING) snprintf(val, sizeof(val), "Checking...");
-      else if (st == UP_CURRENT) snprintf(val, sizeof(val), "Up to date");
-      else if (st == UP_AVAILABLE) snprintf(val, sizeof(val), "Install %s", lt);
-      else if (st == UP_DOWNLOADING) snprintf(val, sizeof(val), "Downloading...");
-      else if (st == UP_INSTALLING) snprintf(val, sizeof(val), "Installing...");
-      else if (st == UP_INSTALLED) snprintf(val, sizeof(val), "Done: reopen");
-      else if (st == UP_RESTART) snprintf(val, sizeof(val), "Restart ReplayOS");
-      else if (st == UP_FAILED) snprintf(val, sizeof(val), "Failed: retry");
-      else snprintf(val, sizeof(val), "Check now");
+      if (st == UP_CHECKING) snprintf(val, sizeof(val), "%s", T("Checking..."));
+      else if (st == UP_CURRENT) snprintf(val, sizeof(val), "%s", T("Up to date"));
+      else if (st == UP_AVAILABLE) snprintf(val, sizeof(val), T("Install %s"), lt);
+      else if (st == UP_DOWNLOADING) snprintf(val, sizeof(val), "%s", T("Downloading..."));
+      else if (st == UP_INSTALLING) snprintf(val, sizeof(val), "%s", T("Installing..."));
+      else if (st == UP_INSTALLED) snprintf(val, sizeof(val), "%s", T("Done: reopen"));
+      else if (st == UP_RESTART) snprintf(val, sizeof(val), "%s", T("Restart ReplayOS"));
+      else if (st == UP_FAILED) snprintf(val, sizeof(val), "%s", T("Failed: retry"));
+      else snprintf(val, sizeof(val), "%s", T("Check now"));
       dim = st == UP_INSTALLED || st == UP_RESTART;
       break;
     }
     case QM_SLEEP:
-      label = "Sleep";
-      if (sleep_min) snprintf(val, sizeof(val), "%d min", sleep_min); else snprintf(val, sizeof(val), "Off");
+      label = T("Sleep");
+      if (sleep_min) snprintf(val, sizeof(val), "%d min", sleep_min); else snprintf(val, sizeof(val), "%s", T("Off"));
       break;
     case QM_AUDIO:
-      label = "Audio";
+      label = T("Audio");
       if (in.naudio > 1) snprintf(val, sizeof(val), "%d/%d %s", in.audio_cur + 1, in.naudio, in.audio_cur < 8 ? in.audio_lang[in.audio_cur] : "");
-      else { snprintf(val, sizeof(val), "one track"); dim = 1; }
+      else { snprintf(val, sizeof(val), "%s", T("one track")); dim = 1; }
       break;
-    case QM_LEVEL: label = "Leveller"; snprintf(val, sizeof(val), "%s", LEVELLER_NAMES[opts.leveller]); break;
-    case QM_ZOOM: label = "Picture"; snprintf(val, sizeof(val), "%s", zoom ? "Zoom" : "Fit"); break;
-    case QM_OUTPUT: label = "Output"; snprintf(val, sizeof(val), "%s", res240 ? "240p" : "480"); break;
-    case QM_SCREEN2: label = "Screen 2"; snprintf(val, sizeof(val), "%s", screen2_on ? "On" : "Off"); break;
-    case QM_SWAP: label = "Swap screens"; break;
-    case QM_TESTCARD: label = "Test card"; break;
-    case QM_HELP: label = "Show controls"; break;
-    case QM_CLOSE: label = "Close"; break;
+    case QM_LEVEL: label = T("Leveller"); snprintf(val, sizeof(val), "%s", T(LEVELLER_NAMES[opts.leveller])); break;
+    case QM_ZOOM: label = T("Picture"); snprintf(val, sizeof(val), "%s", zoom ? T("Zoom") : T("Fit")); break;
+    case QM_OUTPUT: label = T("Output"); snprintf(val, sizeof(val), "%s", res240 ? "240p" : "480"); break;
+    case QM_SCREEN2: label = T("Screen 2"); snprintf(val, sizeof(val), "%s", screen2_on ? T("On") : T("Off")); break;
+    case QM_SWAP: label = T("Swap screens"); break;
+    case QM_TESTCARD: label = T("Test card"); break;
+    case QM_HELP: label = T("Show controls"); break;
+    case QM_CLOSE: label = T("Close"); break;
     }
     if (i == qm_sel) osd_fill(s, x + 4, ry - 4, w - 8, rh - 2, TH->cell_sel, 255);
     osd_text_shadow(s, x + 14, ry + 2, label, 2, dim ? TH->muted : TH->text);
@@ -1406,7 +1488,7 @@ static void draw_qmenu(osd_surface *s)
       osd_text(s, x + w - 14 - osd_text_width(v, 1), ry + 6, v, 1, dim ? TH->muted : TH->title);
     }
   }
-  osd_text(s, x + 14, y + h - 16, "LEFT/RIGHT CHANGE  A SELECT  B CLOSE", 1, TH->muted);
+  osd_text(s, x + 14, y + h - 16, T("LEFT/RIGHT CHANGE  A SELECT  B CLOSE"), 1, TH->muted);
 }
 
 /* sleep timer: warn at one minute, fade the last seconds, then switch off */
@@ -1414,7 +1496,7 @@ static void sleep_tick(void)
 {
   if (!sleep_at || asleep) return;
   double left = sleep_at - t_now();
-  if (left <= SLEEP_UNIT && !sleep_warned) { show_toast("SLEEP 1"); sleep_warned = 1; }
+  if (left <= SLEEP_UNIT && !sleep_warned) { show_toast(T("SLEEP 1")); sleep_warned = 1; }
   if (left <= 0) {
     asleep = 1;
     sleep_at = 0;
@@ -1499,7 +1581,7 @@ static void set_screen2(int on)
     player_close(pl);
     exchange();
     screen2_on = 0;
-    show_toast("SCREEN 2 OFF");
+    show_toast(T("SCREEN 2 OFF"));
     logf_(RETRO_LOG_INFO, "screen 2 off");
   }
   qm_open = 0;
@@ -1518,7 +1600,7 @@ static void swap_screens(void)
   banner_until = other.banner_until = t_now() + (opts.banner_secs > 0 ? opts.banner_secs : INFO_SECONDS);
   focus_flash_until = t_now() + 1.5;
   qm_open = 0;
-  show_toast("SWAPPED");
+  show_toast(T("SWAPPED"));
   logf_(RETRO_LOG_INFO, "swap screens: screen 1 ch %s, screen 2 ch %s",
         chans.ch[focus_side ? other.cur : cur].number, chans.ch[focus_side ? cur : other.cur].number);
 }
@@ -1591,9 +1673,10 @@ static void draw_standby(osd_surface *s)
   int y = margin + (int)((k >> 8) % (uint32_t)(PLAYER_H - h - 2 * margin + 1));
   osd_fill(s, x, y, w, h, TH->bg, 240);
   osd_fill(s, x, y, w, 3, TH->accent, 255);
-  osd_text_shadow(s, x + (w - osd_text_width("SCREEN 2", 3)) / 2, y + 22, "SCREEN 2", 3, TH->title);
-  osd_text_shadow(s, x + (w - osd_text_width("STANDBY", 2)) / 2, y + 56, "STANDBY", 2, TH->text);
-  const char *hint = "X MENU > SCREEN 2 TO TURN ON";
+  const char *t2 = T("SCREEN 2"), *sb = T("STANDBY");
+  osd_text_shadow(s, x + (w - osd_text_width(t2, 3)) / 2, y + 22, t2, 3, TH->title);
+  osd_text_shadow(s, x + (w - osd_text_width(sb, 2)) / 2, y + 56, sb, 2, TH->text);
+  const char *hint = T("X MENU > SCREEN 2 TO TURN ON");
   osd_text(s, x + (w - osd_text_width(hint, 1)) / 2, y + 92, hint, 1, TH->muted);
 }
 
@@ -1605,8 +1688,8 @@ static void draw_focus_flash(osd_surface *s)
   osd_fill(s, 0, PLAYER_H - 6, PLAYER_W, 6, c, 255);
   osd_fill(s, 0, 0, 6, PLAYER_H, c, 255);
   osd_fill(s, PLAYER_W - 6, 0, 6, PLAYER_H, c, 255);
-  char t[16];
-  snprintf(t, sizeof(t), "SCREEN %d", focus_side + 1);
+  char t[32];
+  snprintf(t, sizeof(t), T("SCREEN %d"), focus_side + 1);
   int w = osd_text_width(t, 3) + 32, x = PLAYER_W - w - 24;
   osd_fill(s, x, 24, w, 40, TH->bg, 235);
   osd_fill(s, x, 24, w, 3, c, 255);
@@ -1651,6 +1734,7 @@ static const char REMOTE_HELP[] =
   "  /pause  /play  /live  pause (up to ~15 min), play on, back to live\n"
   "  /status               what's on (JSON)\n"
   "  /channels             every channel with Now/Next, logos and posters (JSON)\n"
+  "  /fav?ch=36&on=1       star channel 36 as a favourite (on=0 unstars it)\n"
   "  /settings             sleep timer, audio track, leveller, picture, output (JSON)\n"
   "  /set?sleep=30&audio=2&leveller=loud&picture=zoom&output=240   change any of them\n"
   "  two screens: add screen=1 or screen=2 to /tune /up /down /last /pause /play /live;\n"
@@ -1741,7 +1825,7 @@ static int remote_answer(const remote_cmd *c, remote_buf *b, void *ctx)
   time_t t = time(NULL);
   switch (c->kind) {
   case RC_CHANNELS:                                  /* no stream URLs: they can carry tokens */
-    remote_puts(b, "{\"ok\":true,\"current\":");
+    remote_printf(b, "{\"ok\":true,\"favourites\":%s,\"current\":", atomic_load(&pub_favs) ? "true" : "false");
     remote_json(b, chans.ch[idx].number);
     remote_printf(b, ",\"time\":%lld,\"channels\":[", (long long)t);
     pthread_mutex_lock(&guide_mu);
@@ -1755,6 +1839,7 @@ static int remote_answer(const remote_cmd *c, remote_buf *b, void *ctx)
       remote_json(b, ch->group);
       remote_puts(b, ",\"logo\":");
       remote_json(b, ch->logo && *ch->logo ? ch->logo : NULL);
+      remote_printf(b, ",\"fav\":%s", is_fav(i) ? "true" : "false");
       remote_now_next(b, ch, t);
       remote_puts(b, "}");
     }
@@ -1835,6 +1920,23 @@ static int remote_answer(const remote_cmd *c, remote_buf *b, void *ctx)
     remote_puts(b, ",\"name\":");
     remote_json(b, chans.ch[idx].name);
     remote_puts(b, "}");
+    return 200;
+  case RC_FAV:
+    if (!atomic_load(&pub_favs)) {
+      remote_puts(b, "{\"ok\":false,\"error\":\"favourites are off (System Settings)\"}");
+      return 409;
+    }
+    idx = remote_find(&chans, c->ch, NULL);
+    if (idx < 0) {
+      remote_puts(b, "{\"ok\":false,\"error\":\"no such channel\",\"asked\":");
+      remote_json(b, c->ch);
+      remote_puts(b, "}");
+      return 404;
+    }
+    atomic_store(&remote_req, RQ(RQ_FAV, c->fav, idx));
+    remote_puts(b, "{\"ok\":true,\"ch\":");
+    remote_json(b, chans.ch[idx].number);
+    remote_printf(b, ",\"fav\":%s}", c->fav ? "true" : "false");
     return 200;
   case RC_UP: case RC_DOWN: case RC_LAST:
     atomic_store(&remote_req, RQ(c->kind == RC_UP ? RQ_UP : c->kind == RC_DOWN ? RQ_DOWN : RQ_LAST, c->screen, 0));
@@ -1956,8 +2058,8 @@ static void remote_apply_settings(void)
 /* tune on the screen in the globals (a remote press) */
 static void remote_tune_here(int kind, size_t idx)
 {
-  if (kind == RQ_UP) idx = (cur + 1) % chans.count;
-  else if (kind == RQ_DOWN) idx = cur ? cur - 1 : chans.count - 1;
+  if (kind == RQ_UP) idx = chan_step(1);
+  else if (kind == RQ_DOWN) idx = chan_step(-1);
   else if (kind == RQ_LAST) idx = prev;
   if (idx >= chans.count) return;
   if (idx == cur && !asleep && !testcard_on && player_get_state(pl) != PLAYER_ERROR) {
@@ -1978,8 +2080,8 @@ static void remote_apply(void)
   pthread_mutex_unlock(&remote_mu);
   if (*miss && !asleep) {
     char t[sizeof(toast)];
-    if (strlen(miss) <= 5 && strcmp(miss, "?")) snprintf(t, sizeof(t), "NO CHANNEL %s", miss);
-    else snprintf(t, sizeof(t), "NO CHANNEL");
+    if (strlen(miss) <= 5 && strcmp(miss, "?")) snprintf(t, sizeof(t), T("NO CHANNEL %s"), miss);
+    else snprintf(t, sizeof(t), "%s", T("NO CHANNEL"));
     show_toast(t);
     logf_(RETRO_LOG_WARN, "remote: no channel %s in the playlist", miss);
   }
@@ -1989,6 +2091,7 @@ static void remote_apply(void)
   size_t idx = (size_t)(r >> 6);
   if (kind == RQ_FOCUS) { if (!asleep) set_focus(target - 1); return; }
   if (kind == RQ_SWAP) { if (!asleep) swap_screens(); return; }
+  if (kind == RQ_FAV) { set_fav(idx, target); return; }
   if (kind == RQ_PAUSE || kind == RQ_LIVE) {         /* the picture on screen: no waking, no clearing */
     int side = target ? target - 1 : focus_side;
     if (asleep || testcard_on || (side != focus_side && !(dual && screen2_on))) return;
@@ -2029,6 +2132,7 @@ static void publish_state(void)
   atomic_store(&pub_dual, dual);
   atomic_store(&pub_s2on, screen2_on);
   atomic_store(&pub_focus, focus_side);
+  atomic_store(&pub_favs, opts.favourites);
   if (dual && screen2_on && other.pl && chans.count) {
     player_state ps = player_get_state(other.pl);
     atomic_store(&pub_state2, asleep ? PS_OFF : ps == PLAYER_PLAYING ? PS_PLAYING : ps == PLAYER_ERROR ? PS_NO_SIGNAL : PS_TUNING);
@@ -2060,9 +2164,9 @@ static void publish_state(void)
   pthread_mutex_unlock(&upd_mu);
   if (*unote) logf_(ust == UP_FAILED ? RETRO_LOG_WARN : RETRO_LOG_INFO, "%s", unote);
   if (ust != upd_seen) {                             /* a word on the TV when something happens */
-    if (ust == UP_AVAILABLE) show_toast("NEW VERSION");
-    else if (ust == UP_INSTALLED || ust == UP_RESTART) show_toast("UPDATED");
-    else if (ust == UP_FAILED && upd_seen != UP_CHECKING) show_toast("UPDATE FAILED");
+    if (ust == UP_AVAILABLE) show_toast(T("NEW VERSION"));
+    else if (ust == UP_INSTALLED || ust == UP_RESTART) show_toast(T("UPDATED"));
+    else if (ust == UP_FAILED && upd_seen != UP_CHECKING) show_toast(T("UPDATE FAILED"));
     upd_seen = ust;
   }
   remote_snap v = { 0 };
@@ -2151,8 +2255,6 @@ static void handle_input(void)
     if (PRESSED(DOWN)) qm_sel = (qm_sel + 1) % qm_n;
     int row = qm_rows[qm_sel];
     int dir = PRESSED(LEFT) ? -1 : PRESSED(RIGHT) ? 1 : FACE(PAD_A) ? 1 : 0;
-    if (dir && row == QM_PAUSE) { player_shift sh; player_get_shift(pl, &sh); set_pause(!sh.paused); }
-    if (FACE(PAD_A) && row == QM_LIVE) { go_live(); qm_open = 0; }
     if (dir && row == QM_SLEEP) step_sleep(dir);
     if (dir && row == QM_AUDIO) step_audio(dir);
     if (dir && row == QM_LEVEL) step_leveller(dir);
@@ -2168,38 +2270,51 @@ static void handle_input(void)
   }
   if (guide_open) {
     time_t now = time(NULL), first = guide_slot(now) - GUIDE_STEP, last = now + 24 * 3600;
-    if (PRESSED(UP))    gv.sel = gv.sel ? gv.sel - 1 : chans.count - 1;
-    if (PRESSED(DOWN))  gv.sel = (gv.sel + 1) % chans.count;
+    size_t n = guide_sync(), pos = gv.sel;
+    if (n) {
+      if (PRESSED(UP))    pos = pos ? pos - 1 : n - 1;
+      if (PRESSED(DOWN))  pos = (pos + 1) % n;
+      guide_ch = gv.rows ? gv.rows[pos] : pos;
+      if (opts.favourites && FACE(PAD_Y)) set_fav(guide_ch, !is_fav(guide_ch));
+      if (FACE(PAD_A)) { guide_open = 0; if (guide_ch != cur) tune(guide_ch); }
+    }
     if (PRESSED(LEFT) && gv.t0 - GUIDE_STEP >= first) gv.t0 -= GUIDE_STEP;
     if (PRESSED(RIGHT) && gv.t0 + GUIDE_STEP <= last) gv.t0 += GUIDE_STEP;
-    guide_scroll(&gv, chans.count);
-    if (FACE(PAD_A)) { guide_open = 0; if (gv.sel != cur) tune(gv.sel); }
+    if (opts.favourites && FACE(PAD_X)) set_favview(!list_favs);   /* favourites only / every channel */
+    guide_sync();
     if (FACE(PAD_B) || PRESSED(START)) guide_open = 0;
     return;
   }
   if (list_open) {
-    if (PRESSED(UP))   list_cursor = list_cursor ? list_cursor - 1 : chans.count - 1;
-    if (PRESSED(DOWN)) list_cursor = (list_cursor + 1) % chans.count;
-    if (PRESSED(LEFT))  list_cursor = list_cursor > LIST_ROWS ? list_cursor - LIST_ROWS : 0;          /* a page up */
-    if (PRESSED(RIGHT)) list_cursor = list_cursor + LIST_ROWS < chans.count ? list_cursor + LIST_ROWS : chans.count - 1;
-    if (FACE(PAD_A))   { list_open = 0; tune(list_cursor); }
+    size_t n = list_rows(), pos = list_pos(n);
+    if (n) {
+      if (PRESSED(UP))   pos = pos ? pos - 1 : n - 1;
+      if (PRESSED(DOWN)) pos = (pos + 1) % n;
+      if (PRESSED(L2)) pos = pos > LIST_ROWS ? pos - LIST_ROWS : 0;           /* a page up */
+      if (PRESSED(R2)) pos = pos + LIST_ROWS < n ? pos + LIST_ROWS : n - 1;
+      list_cursor = lv[pos];
+      if (opts.favourites && FACE(PAD_Y)) set_fav(list_cursor, !is_fav(list_cursor));   /* the row's star shows it */
+      if (FACE(PAD_A)) { list_open = 0; tune(list_cursor); }
+    }
+    if (opts.favourites && FACE(PAD_X)) set_favview(!list_favs);   /* favourites only / every channel */
     if (FACE(PAD_B) || PRESSED(SELECT)) list_open = 0;
     return;
   }
-  if (PRESSED(UP) || PRESSED(R))   tune((cur + 1) % chans.count);
-  if (PRESSED(DOWN) || PRESSED(L)) tune(cur ? cur - 1 : chans.count - 1);
+  if (PRESSED(UP) || PRESSED(R))   tune(chan_step(1));
+  if (PRESSED(DOWN) || PRESSED(L)) tune(chan_step(-1));
   if (FACE(PAD_B))     tune(prev);
   if (FACE(PAD_A))     banner_until = t_now() + (opts.banner_secs > 0 ? opts.banner_secs : INFO_SECONDS);
   if (PRESSED(SELECT)) { list_open = 1; list_cursor = cur; }
   if (dual && PRESSED(LEFT)) set_focus(0);
-  if (dual && PRESSED(RIGHT)) { if (screen2_on) set_focus(1); else show_toast("SCREEN 2 OFF"); }
+  if (dual && PRESSED(RIGHT)) { if (screen2_on) set_focus(1); else show_toast(T("SCREEN 2 OFF")); }
   if (FACE(PAD_X)) { qm_open = 1; qm_sel = 0; }
   if (PRESSED(START)) {
     guide_open = 1;
-    gv.sel = cur;
+    guide_ch = cur;
     gv.t0 = guide_slot(time(NULL));
-    gv.top = cur > 2 ? cur - 2 : 0;                  /* a little context above */
-    guide_scroll(&gv, chans.count);
+    guide_sync();
+    gv.top = gv.sel > 2 ? gv.sel - 2 : 0;            /* a little context above */
+    guide_sync();
   }
   if (PRESSED(R2)) { player_shift sh; player_get_shift(pl, &sh); set_pause(!sh.paused); }
   if (PRESSED(L2)) go_live();
@@ -2219,6 +2334,27 @@ static void handle_input(void)
 
 RETRO_API unsigned retro_api_version(void) { return RETRO_API_VERSION; }
 
+/* The language chosen last time: System Settings' names are declared here, before
+ * the frontend says which language is set, so they follow a choice at the next start. */
+static int saved_language(retro_environment_t cb)
+{
+  static const char *roots[] = { "/media/nfs", "/media/usb", "/media/nvme", "/media/sd" };
+  const char *dir = NULL;
+  char path[600];
+  for (int i = -1; i < (int)(sizeof(roots) / sizeof(roots[0])); i++) {
+    if (i < 0 && !(cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &dir) && dir && *dir)) continue;
+    if (i < 0) snprintf(path, sizeof(path), "%s/retrotv-language.txt", dir);
+    else snprintf(path, sizeof(path), "%s/saves/retrotv/retrotv-language.txt", roots[i]);   /* ReplayOS */
+    char *t = slurp(path, 64);
+    if (!t) continue;
+    t[strcspn(t, "\r\n")] = '\0';
+    int l = lang_parse(t);
+    free(t);
+    return l;
+  }
+  return LANG_EN;
+}
+
 RETRO_API void retro_set_environment(retro_environment_t cb)
 {
   env_cb = cb;
@@ -2226,6 +2362,7 @@ RETRO_API void retro_set_environment(retro_environment_t cb)
   if (cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &logging)) log_cb = logging.log;
   bool no_game = true;   /* launched from ReplayOS Extra without a playlist path */
   cb(RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME, &no_game);
+  lang_set(saved_language(cb));
   options_version = options_register(cb);
   options_defaults(&opts);
 }
@@ -2375,6 +2512,16 @@ RETRO_API void retro_unload_game(void)
   sleep_at = 0;
   chanpref_free(&zprefs);
   zoom_path[0] = '\0';
+  chanpref_free(&fprefs);
+  fav_path[0] = '\0';
+  fav_save = list_favs = favview_save = 0;
+  favview_path[0] = '\0';
+  gv.rows = NULL;
+  gv.nrows = 0;
+  free(pub_fav);                                     /* the server is stopped */
+  pub_fav = NULL;
+  free(lv);
+  lv = NULL;
   saved_idx = -1;
 }
 
@@ -2464,6 +2611,17 @@ RETRO_API void retro_run(void)
     if (zt && !save_text_async(zoom_path, zt)) zoom_save = 0;
     free(zt);
   }
+  if (lang_save && *state_dir) {
+    char lp[1100];
+    snprintf(lp, sizeof(lp), "%s/retrotv-language.txt", state_dir);
+    if (!save_text_async(lp, lang_get() == LANG_ES ? "es\n" : "en\n")) lang_save = 0;
+  }
+  if (favview_save && !save_text_async(favview_path, list_favs ? "favourites=on\n" : "favourites=off\n")) favview_save = 0;
+  if (fav_save) {
+    char *ft = chanpref_format(&fprefs);
+    if (ft && !save_text_async(fav_path, ft)) fav_save = 0;
+    free(ft);
+  }
   if (welcome_save) {
     char wp[1100];
     welcome_path(wp, sizeof(wp));
@@ -2492,6 +2650,7 @@ RETRO_API void retro_run(void)
   if (welcome_on) draw_welcome(&s);
   else if (qm_open) draw_qmenu(&s);
   else if (guide_open) {
+    guide_sync();                                    /* a star from the phone may change the rows */
     pthread_mutex_lock(&guide_mu);
     guide_draw(&s, &chans, guide, &gv, cur, time(NULL));
     pthread_mutex_unlock(&guide_mu);
