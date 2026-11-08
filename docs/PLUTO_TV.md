@@ -16,6 +16,11 @@ films, cartoons, true crime, sport, documentaries and more.
 M3U playlists of Pluto's channels for several regions, each with a TV guide, and RetroTV plays
 them directly.
 
+## Quickest: from playlist.txt
+
+New installs list every region in `retrotv/playlist.txt`, commented out. Remove the `#` in front
+of one link, save, and reopen RetroTV.
+
 ## Add it as a line-up
 
 1. On [BuddyChewChew/pluto](https://github.com/BuddyChewChew/pluto), open the `.m3u` playlist
