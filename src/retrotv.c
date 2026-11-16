@@ -530,6 +530,32 @@ static size_t guide_sync(void)
   return gv.nrows;
 }
 
+/* groups (group-title): Left/Right in the channel list jump between them */
+static const char *grp(size_t i) { return chans.ch[i].group ? chans.ch[i].group : ""; }
+static int same_group(size_t a, size_t b) { return !strcmp(grp(a), grp(b)); }
+
+/* the list's rows hold more than one group */
+static int list_groups(size_t n)
+{
+  for (size_t k = 1; k < n; k++) if (!same_group(lv[k], lv[0])) return 1;
+  return 0;
+}
+
+/* the first row of the next (dir > 0) or previous group, wrapping round; a group
+ * is a run of rows (a playlist not sorted by group just has more, shorter runs) */
+static size_t group_jump(size_t n, size_t pos, int dir)
+{
+  if (dir > 0) {
+    for (size_t k = pos + 1; k < n; k++) if (!same_group(lv[k], lv[pos])) return k;
+    return 0;
+  }
+  size_t start = pos;
+  while (start > 0 && same_group(lv[start - 1], lv[start])) start--;
+  size_t prev = start ? start - 1 : n - 1;
+  while (prev > 0 && same_group(lv[prev - 1], lv[prev])) prev--;
+  return prev;
+}
+
 static void draw_list(osd_surface *s)
 {
   int rows = LIST_ROWS, x = 40, y = 40, w = PLAYER_W - 80, rh = 30;
@@ -552,12 +578,24 @@ static void draw_list(osd_surface *s)
     size_t i = lv[first + (size_t)r];
     int ry = y + 36 + r * rh;
     if (first + (size_t)r == pos) osd_fill(s, x + 4, ry - 4, w - 8, rh - 2, TH->cell_sel, 255);
+    if (r && !same_group(i, lv[first + (size_t)r - 1])) osd_fill(s, x + 8, ry - 5, w - 16, 1, TH->accent, 255);   /* a new group */
     char num[16], name[40];
     clip_copy(num, sizeof(num), chans.ch[i].number, 6);
     clip_copy(name, sizeof(name), chans.ch[i].name, 25);
     osd_text(s, x + 14, ry + 2, num, 2, i == cur ? TH->title : TH->sub);
     osd_text(s, x + 120, ry + 2, name, 2, TH->text);
     if (opts.favourites && is_fav(i)) osd_text(s, x + w - 34, ry + 2, OSD_STAR, 2, TH->title);
+  }
+  if (list_groups(n)) {                              /* under the list: the cursor's group */
+    int fy = y + 36 + rows * rh + 4;
+    char g[48], t[64];
+    if (*grp(lv[pos])) clip_copy(g, sizeof(g), grp(lv[pos]), 40);
+    else snprintf(g, sizeof(g), "%s", T("No group"));
+    snprintf(t, sizeof(t), "< %s >", g);
+    const char *gh = T("LEFT/RIGHT GROUP");
+    osd_fill(s, x, fy, w, 24, TH->bg, 230);
+    osd_text(s, x + 12, fy + 8, t, 1, TH->title);
+    osd_text(s, x + w - 12 - osd_text_width(gh, 1), fy + 8, gh, 1, TH->muted);
   }
 }
 
@@ -2292,6 +2330,8 @@ static void handle_input(void)
       if (PRESSED(DOWN)) pos = (pos + 1) % n;
       if (PRESSED(L2)) pos = pos > LIST_ROWS ? pos - LIST_ROWS : 0;           /* a page up */
       if (PRESSED(R2)) pos = pos + LIST_ROWS < n ? pos + LIST_ROWS : n - 1;
+      if (PRESSED(LEFT) && list_groups(n)) pos = group_jump(n, pos, -1);       /* previous / next group */
+      if (PRESSED(RIGHT) && list_groups(n)) pos = group_jump(n, pos, 1);
       list_cursor = lv[pos];
       if (opts.favourites && FACE(PAD_Y)) set_fav(list_cursor, !is_fav(list_cursor));   /* the row's star shows it */
       if (FACE(PAD_A)) { list_open = 0; tune(list_cursor); }
